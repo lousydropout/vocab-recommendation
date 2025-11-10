@@ -7,22 +7,24 @@ vocab_recommendation/
 ├── bin/
 │   └── vocab_recommendation.ts          # CDK app entry
 ├── lib/
-│   └── vocab_recommendation-stack.ts   # Main CDK stack
+│   └── vocab_recommendation-stack.ts   # Main CDK stack ✅
+├── test/
+│   └── vocab_recommendation.test.ts    # CDK unit tests ✅
 ├── lambda/
-│   ├── api/
-│   │   ├── lambda_function.py               # FastAPI handler
-│   │   ├── app.py                          # FastAPI app
-│   │   └── requirements.txt                # FastAPI, boto3, mangum
-│   └── processor/
-│       ├── lambda_function.py              # Processing handler
-│       ├── processor.py                    # spaCy + Bedrock logic
-│       └── requirements.txt                # boto3
+│   ├── api/                             # TODO: Epic 2
+│   │   ├── lambda_function.py
+│   │   ├── app.py
+│   │   └── requirements.txt
+│   └── processor/                       # TODO: Epic 3
+│       ├── lambda_function.py
+│       ├── processor.py
+│       └── requirements.txt
 ├── layers/
-│   └── spacy/
-│       ├── requirements.txt                # spacy, en_core_web_sm
-│       └── build_layer.sh                  # Script to build layer
-├── memory-bank/                            # Project documentation
-└── package.json                            # CDK dependencies (TypeScript)
+│   └── spacy/                           # TODO: Epic 3
+│       ├── requirements.txt
+│       └── build_layer.sh
+├── memory-bank/                         # Project documentation
+└── package.json                         # CDK dependencies (TypeScript)
 ```
 
 ## Key Implementation Details
@@ -81,12 +83,23 @@ vocab_recommendation/
 
 ## Deployment Checklist
 
-1. ✅ Build spaCy Lambda layer
-2. ✅ Deploy CDK stack: `cdk deploy`
-3. ✅ Test API endpoints
-4. ✅ Verify S3 → SQS → Lambda flow
-5. ✅ Test Bedrock integration
-6. ✅ Monitor CloudWatch logs
+### Epic 1: Infrastructure ✅
+1. ✅ Deploy CDK stack: `cdk deploy --require-approval never`
+2. ✅ Verify all resources created (S3, DynamoDB, SQS, IAM roles)
+3. ✅ Run unit tests: `npm test` (25 tests passing)
+4. ✅ Verify CloudFormation outputs exported
+
+### Epic 2: API Layer (TODO)
+1. ⏳ Build spaCy Lambda layer
+2. ⏳ Create API Lambda with FastAPI
+3. ⏳ Create S3 upload trigger Lambda
+4. ⏳ Deploy and test API endpoints
+5. ⏳ Verify S3 → SQS → Lambda flow
+
+### Epic 3: Processing (TODO)
+1. ⏳ Create processor Lambda
+2. ⏳ Test Bedrock integration
+3. ⏳ Monitor CloudWatch logs
 
 ## Common Issues
 
@@ -115,8 +128,45 @@ vocab_recommendation/
 
 ## Testing Strategy
 
-1. **Unit Tests**: Test processor logic with mock Bedrock responses
-2. **Integration Tests**: Test full flow with test S3 bucket
-3. **Load Tests**: Verify < 60s end-to-end latency
-4. **Error Tests**: Test DLQ, timeout, and error scenarios
+### CDK Infrastructure Tests ✅
+1. ✅ **Unit Tests**: 25 tests covering all CDK resources
+   - S3 bucket configuration
+   - DynamoDB table schema
+   - SQS queues (main + DLQ)
+   - IAM roles and policies
+   - CloudFormation outputs
+   - Resource counts
+   - Run with: `npm test`
+
+### Lambda Function Tests (TODO)
+1. ⏳ **Unit Tests**: Test processor logic with mock Bedrock responses
+2. ⏳ **Integration Tests**: Test full flow with test S3 bucket
+3. ⏳ **Load Tests**: Verify < 60s end-to-end latency
+4. ⏳ **Error Tests**: Test DLQ, timeout, and error scenarios
+
+## Epic 1 Implementation Details
+
+### Resources Created
+- **S3 Bucket**: `vocab-essays-{account}-{region}`
+  - Auto-delete on stack deletion
+  - S3-managed encryption
+  - CORS enabled for web uploads
+  - Public access blocked
+
+- **DynamoDB Table**: `EssayMetrics`
+  - Partition key: `essay_id` (String)
+  - On-demand billing
+  - AWS-managed encryption
+
+- **SQS Queues**:
+  - `essay-processing-queue`: Main queue, 5min visibility timeout
+  - `essay-processing-dlq`: Dead-letter queue, 3 retry attempts
+
+- **IAM Roles**:
+  - `ApiLambdaRole`: For API Gateway Lambda (Epic 2)
+  - `S3UploadLambdaRole`: For S3 event trigger Lambda (Epic 2)
+  - `ProcessorLambdaRole`: For essay processor Lambda (Epic 3)
+
+### Stack Outputs
+All resource names and ARNs are exported as CloudFormation outputs for easy reference in subsequent epics.
 

@@ -1,30 +1,46 @@
 # Task List — Vocabulary Essay Analyzer (PoC)
 
-## 🧭 **Epic 1: Infrastructure Setup (AWS CDK)**
+## 🧭 **Epic 1: Infrastructure Setup (AWS CDK)** ✅ **COMPLETE**
 
 **Goal:** Define and deploy all core AWS resources.
 
 ### Tasks
 
-1. **Initialize CDK project**
-   - `cdk init app --language typescript`
-   - Add `.env` for stack config (region, account).
+1. ✅ **Initialize CDK project**
+   - `cdk init app --language typescript` - Done
+   - Add `.env` for stack config (region, account) - Done (uses env vars with fallback)
 
-2. **Create S3 bucket** for essay uploads
-   - Enable event notifications → trigger Lambda on `ObjectCreated`.
+2. ✅ **Create S3 bucket** for essay uploads
+   - Created `EssaysBucket` with auto-delete, encryption, CORS
+   - Event notifications will be configured in Epic 2 when Lambda is created
 
-3. **Create SQS queue** `EssayProcessingQueue`
-   - Triggered by S3 upload Lambda.
+3. ✅ **Create SQS queue** `EssayProcessingQueue`
+   - Created with DLQ (3 retry attempts)
+   - 5-minute visibility timeout
+   - 14-day message retention
+   - SQS-managed encryption
 
-4. **Create DynamoDB table** `EssayMetrics` (schema below).
+4. ✅ **Create DynamoDB table** `EssayMetrics`
+   - Partition key: `essay_id` (String)
+   - On-demand billing mode
+   - AWS-managed encryption
+   - Point-in-time recovery disabled (for PoC)
 
-5. **Create IAM roles/policies**
-   - S3: read/write
-   - SQS: send/receive
-   - DynamoDB: read/write
-   - Bedrock: invoke model endpoint
+5. ✅ **Create IAM roles/policies**
+   - **ApiLambdaRole**: S3 read/write, DynamoDB read/write, SQS send
+   - **S3UploadLambdaRole**: S3 read, SQS send
+   - **ProcessorLambdaRole**: S3 read, DynamoDB read/write, SQS consume, Bedrock invoke (Claude 3 models)
+   - All roles have CloudWatch Logs permissions
 
-6. **Deploy CDK stack** and test resource creation.
+6. ✅ **Deploy CDK stack** and test resource creation.
+   - Stack deployed successfully to `us-east-1`
+   - All resources created and verified
+   - CloudFormation outputs exported
+
+7. ✅ **Unit Tests**
+   - Added 25 comprehensive unit tests
+   - All tests passing
+   - Tests cover: S3, DynamoDB, SQS, IAM roles/policies, CloudFormation outputs
 
 ---
 

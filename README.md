@@ -122,7 +122,10 @@ See [`memory-bank/api-spec.md`](memory-bank/api-spec.md) for detailed API docume
 ## Status
 
 🚧 **In Development** - Following the task list in Epic 1-5:
-- [ ] Epic 1: Infrastructure Setup (AWS CDK)
+- [x] Epic 1: Infrastructure Setup (AWS CDK) ✅ **COMPLETE**
+  - All AWS resources deployed (S3, DynamoDB, SQS, IAM roles)
+  - 25 unit tests passing
+  - Stack deployed to `us-east-1`
 - [ ] Epic 2: API Layer (FastAPI + Mangum)
 - [ ] Epic 3: Processing Pipeline (spaCy + Bedrock)
 - [ ] Epic 4: Frontend (React + Tailwind + shadcn/ui)
