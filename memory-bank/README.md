@@ -12,6 +12,7 @@ This directory contains project knowledge, architecture decisions, and implement
 - `data-models.md` - Data schemas and models
 - `task-list.md` - Development task list organized by epic
 - `progress.md` - Project progress tracking and epic completion status
+- `epic2-summary.md` - Detailed summary of Epic 2 implementation
 
 ## Purpose
 

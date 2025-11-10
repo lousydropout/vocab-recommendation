@@ -4,6 +4,10 @@ import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as sqs from 'aws-cdk-lib/aws-sqs';
 import * as iam from 'aws-cdk-lib/aws-iam';
+import * as lambda from 'aws-cdk-lib/aws-lambda';
+import * as apigateway from 'aws-cdk-lib/aws-apigateway';
+import * as s3n from 'aws-cdk-lib/aws-s3-notifications';
+import * as path from 'path';
 
 export class VocabRecommendationStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
@@ -113,6 +117,91 @@ export class VocabRecommendationStack extends cdk.Stack {
       })
     );
 
+    // API Lambda Function
+    // Skip bundling in test environment (Docker not available)
+    const apiLambdaCode = process.env.CDK_SKIP_BUNDLING === 'true'
+      ? lambda.Code.fromAsset(path.join(__dirname, '../lambda/api'))
+      : lambda.Code.fromAsset(path.join(__dirname, '../lambda/api'), {
+          bundling: {
+            image: lambda.Runtime.PYTHON_3_12.bundlingImage,
+            command: [
+              'bash', '-c',
+              'pip install -r requirements.txt -t /asset-output && cp -au . /asset-output',
+            ],
+          },
+        });
+    
+    const apiLambda = new lambda.Function(this, 'ApiLambda', {
+      runtime: lambda.Runtime.PYTHON_3_12,
+      handler: 'lambda_function.handler',
+      code: apiLambdaCode,
+      role: apiLambdaRole,
+      timeout: cdk.Duration.seconds(30),
+      environment: {
+        ESSAYS_BUCKET: essaysBucket.bucketName,
+        METRICS_TABLE: metricsTable.tableName,
+        PROCESSING_QUEUE_URL: processingQueue.queueUrl,
+      },
+    });
+
+    // S3 Upload Trigger Lambda Function
+    // Skip bundling in test environment (Docker not available)
+    const s3UploadLambdaCode = process.env.CDK_SKIP_BUNDLING === 'true'
+      ? lambda.Code.fromAsset(path.join(__dirname, '../lambda/s3_upload_trigger'))
+      : lambda.Code.fromAsset(path.join(__dirname, '../lambda/s3_upload_trigger'), {
+          bundling: {
+            image: lambda.Runtime.PYTHON_3_12.bundlingImage,
+            command: [
+              'bash', '-c',
+              'pip install -r requirements.txt -t /asset-output && cp -au . /asset-output',
+            ],
+          },
+        });
+    
+    const s3UploadLambda = new lambda.Function(this, 'S3UploadLambda', {
+      runtime: lambda.Runtime.PYTHON_3_12,
+      handler: 'lambda_function.handler',
+      code: s3UploadLambdaCode,
+      role: s3UploadLambdaRole,
+      timeout: cdk.Duration.seconds(30),
+      environment: {
+        PROCESSING_QUEUE_URL: processingQueue.queueUrl,
+      },
+    });
+
+    // S3 Event Notification - trigger Lambda on object creation
+    essaysBucket.addEventNotification(
+      s3.EventType.OBJECT_CREATED,
+      new s3n.LambdaDestination(s3UploadLambda),
+      { prefix: 'essays/' }
+    );
+
+    // API Gateway
+    const api = new apigateway.RestApi(this, 'VocabApi', {
+      restApiName: 'Vocabulary Essay Analyzer API',
+      description: 'API for vocabulary essay analysis',
+      defaultCorsPreflightOptions: {
+        allowOrigins: apigateway.Cors.ALL_ORIGINS,
+        allowMethods: apigateway.Cors.ALL_METHODS,
+        allowHeaders: ['Content-Type', 'X-Amz-Date', 'Authorization', 'X-Api-Key'],
+      },
+    });
+
+    // API Gateway Integration
+    const apiIntegration = new apigateway.LambdaIntegration(apiLambda);
+
+    // POST /essay endpoint
+    const essayResource = api.root.addResource('essay');
+    essayResource.addMethod('POST', apiIntegration);
+
+    // GET /essay/{essay_id} endpoint
+    const essayIdResource = essayResource.addResource('{essay_id}');
+    essayIdResource.addMethod('GET', apiIntegration);
+
+    // Health check endpoint
+    const healthResource = api.root.addResource('health');
+    healthResource.addMethod('GET', apiIntegration);
+
     // CloudFormation Outputs
     new cdk.CfnOutput(this, 'EssaysBucketName', {
       value: essaysBucket.bucketName,
@@ -148,6 +237,12 @@ export class VocabRecommendationStack extends cdk.Stack {
       value: processorLambdaRole.roleArn,
       description: 'IAM role ARN for processor Lambda',
       exportName: 'ProcessorLambdaRoleArn',
+    });
+
+    new cdk.CfnOutput(this, 'ApiUrl', {
+      value: api.url,
+      description: 'API Gateway endpoint URL',
+      exportName: 'ApiUrl',
     });
   }
 }

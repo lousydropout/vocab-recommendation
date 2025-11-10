@@ -89,12 +89,14 @@ vocab_recommendation/
 3. ✅ Run unit tests: `npm test` (25 tests passing)
 4. ✅ Verify CloudFormation outputs exported
 
-### Epic 2: API Layer (TODO)
-1. ⏳ Build spaCy Lambda layer
-2. ⏳ Create API Lambda with FastAPI
-3. ⏳ Create S3 upload trigger Lambda
-4. ⏳ Deploy and test API endpoints
-5. ⏳ Verify S3 → SQS → Lambda flow
+### Epic 2: API Layer ✅
+1. ✅ Create API Lambda with FastAPI + Mangum
+2. ✅ Create S3 upload trigger Lambda
+3. ✅ Configure API Gateway with CORS
+4. ✅ Set up S3 event notifications
+5. ✅ Deploy and test API endpoints (6/6 tests passing)
+6. ✅ Verify S3 → SQS → Lambda flow
+7. ✅ Configure Python dependency bundling in CDK
 
 ### Epic 3: Processing (TODO)
 1. ⏳ Create processor Lambda
@@ -138,6 +140,15 @@ vocab_recommendation/
    - Resource counts
    - Run with: `npm test`
 
+### API Integration Tests ✅
+1. ✅ **Integration Tests**: Created `test_api.py` with 6 tests
+   - Health endpoint
+   - POST /essay (direct upload)
+   - POST /essay (presigned URL)
+   - GET /essay/{essay_id}
+   - Error handling (404, empty requests)
+   - All tests passing
+
 ### Lambda Function Tests (TODO)
 1. ⏳ **Unit Tests**: Test processor logic with mock Bedrock responses
 2. ⏳ **Integration Tests**: Test full flow with test S3 bucket
@@ -169,4 +180,37 @@ vocab_recommendation/
 
 ### Stack Outputs
 All resource names and ARNs are exported as CloudFormation outputs for easy reference in subsequent epics.
+
+## Epic 2 Implementation Details
+
+### Lambda Functions Created
+- **API Lambda** (`lambda/api/`):
+  - FastAPI application with 3 endpoints
+  - Mangum adapter for Lambda integration
+  - CORS middleware enabled
+  - Environment variables: ESSAYS_BUCKET, METRICS_TABLE, PROCESSING_QUEUE_URL
+
+- **S3 Upload Trigger Lambda** (`lambda/s3_upload_trigger/`):
+  - Processes S3 ObjectCreated events
+  - Extracts essay_id from S3 key
+  - Sends messages to SQS queue
+  - Environment variable: PROCESSING_QUEUE_URL
+
+### API Gateway Configuration
+- **Base URL**: `https://3uyr4x1nta.execute-api.us-east-1.amazonaws.com/prod/`
+- **Endpoints**:
+  - `POST /essay` - Create essay (direct upload or presigned URL)
+  - `GET /essay/{essay_id}` - Retrieve essay results
+  - `GET /health` - Health check
+- **CORS**: Enabled for all origins
+
+### Python Dependency Bundling
+- CDK configured to bundle Python dependencies using Docker
+- Bundling skipped during tests (`CDK_SKIP_BUNDLING=true`)
+- Dependencies automatically installed during deployment
+
+### Testing
+- **CDK Tests**: 25/25 passing (infrastructure validation)
+- **API Tests**: 6/6 passing (integration tests)
+- Test script: `test_api.py` for API endpoint validation
 

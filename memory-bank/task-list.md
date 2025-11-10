@@ -44,34 +44,51 @@
 
 ---
 
-## 🧮 **Epic 2: API Layer (FastAPI + Mangum)**
+## 🧮 **Epic 2: API Layer (FastAPI + Mangum)** ✅ **COMPLETE**
 
 **Goal:** Expose upload and retrieval endpoints.
 
 ### Tasks
 
-1. **Create Lambda with FastAPI + Mangum handler.**
+1. ✅ **Create Lambda with FastAPI + Mangum handler.**
+   - Created API Lambda with FastAPI application
+   - Configured Mangum adapter for Lambda
+   - Added CORS middleware
+   - Health check endpoint implemented
 
-2. **Implement `/essay (POST)`**
-   - Accept metadata + file (or pre-signed URL request).
-   - Generate `essay_id` (UUID).
-   - Upload file to S3 or return pre-signed URL.
-   - Insert record in DynamoDB:
-     ```json
-     {
-       "essay_id": "...",
-       "status": "awaiting_processing",
-       "file_key": "...",
-       "created_at": "...",
-       "updated_at": "..."
-     }
-     ```
-   - Push SQS message `{ "essay_id": "...", "file_key": "..." }`.
-   - Return `essay_id` in response.
+2. ✅ **Implement `/essay (POST)`**
+   - Accepts `essay_text` for direct upload OR `request_presigned_url` for presigned URL
+   - Generates `essay_id` (UUID)
+   - Uploads file directly to S3 if `essay_text` provided
+   - Generates presigned URL if requested or if no text provided
+   - Inserts record in DynamoDB with status `awaiting_processing`
+   - Returns `essay_id`, `status`, and optional `presigned_url`
 
-3. **Implement `/essay/{essay_id} (GET)`**
-   - Query DynamoDB for essay record.
-   - Return status, metrics, feedback JSON.
+3. ✅ **Implement `/essay/{essay_id} (GET)`**
+   - Queries DynamoDB for essay record
+   - Returns status, metrics, feedback JSON
+   - Handles 404 for non-existent essays
+
+4. ✅ **Create S3 Upload Trigger Lambda**
+   - Processes S3 `ObjectCreated` events
+   - Extracts `essay_id` from S3 key
+   - Sends message to SQS queue for processing
+   - Filters only files in `essays/` prefix
+
+5. ✅ **Configure API Gateway**
+   - Created REST API with CORS support
+   - Integrated Lambda functions
+   - Configured endpoints: POST /essay, GET /essay/{essay_id}, GET /health
+
+6. ✅ **Set up S3 Event Notifications**
+   - Configured S3 bucket to trigger Lambda on object creation
+   - Filtered to `essays/` prefix only
+
+7. ✅ **Deploy and Test**
+   - Stack deployed successfully
+   - All API endpoints tested and working
+   - Created comprehensive test script (`test_api.py`)
+   - All 6 API integration tests passing
 
 ---
 

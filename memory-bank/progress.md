@@ -32,17 +32,34 @@
 
 ---
 
-### ⏳ Epic 2: API Layer (FastAPI + Mangum) - IN PROGRESS
+### ✅ Epic 2: API Layer (FastAPI + Mangum) - COMPLETE
 
-**Status:** Not started
+**Completed:** 2025-11-10
 
-**Tasks:**
-- Create API Lambda with FastAPI + Mangum
-- Implement POST /essay endpoint
-- Implement GET /essay/{essay_id} endpoint
-- Create S3 upload trigger Lambda
-- Configure API Gateway
-- Set up S3 event notifications
+**Summary:**
+- All API endpoints implemented and deployed
+- API Gateway configured with CORS
+- S3 event notifications working
+- Comprehensive test suite created and passing
+
+**Resources Deployed:**
+- API Lambda: FastAPI application with Mangum adapter
+- S3 Upload Trigger Lambda: Processes S3 events and sends to SQS
+- API Gateway: REST API with 3 endpoints
+- S3 Event Notifications: Configured to trigger Lambda
+
+**Key Achievements:**
+- Direct upload and presigned URL support
+- Full DynamoDB integration for essay records
+- S3 → Lambda → SQS flow working
+- Python dependency bundling configured in CDK
+- All 6 API integration tests passing
+- API URL: `https://3uyr4x1nta.execute-api.us-east-1.amazonaws.com/prod/`
+
+**Testing:**
+- Created `test_api.py` with 6 comprehensive tests
+- All API endpoints tested and verified
+- Health check, POST, GET, and error handling all working
 
 ---
 
@@ -73,8 +90,10 @@
 
 ## Next Steps
 
-1. Begin Epic 2: API Layer implementation
-2. Create Lambda function directories and code
-3. Build and deploy API Lambda
-4. Test API endpoints
+1. Begin Epic 3: Processing Pipeline implementation
+2. Build spaCy Lambda layer
+3. Create processor Lambda with spaCy integration
+4. Implement Bedrock integration for word-level feedback
+5. Configure SQS event source for processor Lambda
+6. Test end-to-end processing flow
 

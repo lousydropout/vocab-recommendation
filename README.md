@@ -126,7 +126,11 @@ See [`memory-bank/api-spec.md`](memory-bank/api-spec.md) for detailed API docume
   - All AWS resources deployed (S3, DynamoDB, SQS, IAM roles)
   - 25 unit tests passing
   - Stack deployed to `us-east-1`
-- [ ] Epic 2: API Layer (FastAPI + Mangum)
+- [x] Epic 2: API Layer (FastAPI + Mangum) ✅ **COMPLETE**
+  - API Lambda and S3 trigger Lambda deployed
+  - API Gateway configured with 3 endpoints
+  - 6/6 API integration tests passing
+  - API URL: `https://3uyr4x1nta.execute-api.us-east-1.amazonaws.com/prod/`
 - [ ] Epic 3: Processing Pipeline (spaCy + Bedrock)
 - [ ] Epic 4: Frontend (React + Tailwind + shadcn/ui)
 - [ ] Epic 5: Observability
