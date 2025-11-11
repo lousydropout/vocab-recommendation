@@ -59,6 +59,24 @@ If not set, it defaults to the production API URL.
 3. Wait for processing (typically ~30-40 seconds)
 4. View metrics and word-level feedback
 
+## Testing
+
+### Unit Tests
+Run fast unit tests with jsdom:
+```bash
+npm test
+```
+
+### Integration Tests (Browser)
+Run integration tests in a real browser:
+```bash
+npm run test:browser
+```
+
+**Note**: Browser tests use Playwright with Chromium. They test complete user flows like login, protected routes, and API calls with real tokens. Unit tests use jsdom for faster execution.
+
+See `memory-bank/testing-strategy.md` for detailed testing documentation.
+
 ## Project Structure
 
 ```
@@ -67,6 +85,9 @@ frontend/
 │   ├── lib/
 │   │   ├── api.ts          # API client functions
 │   │   └── utils.ts        # Utility functions
+│   ├── __tests__/
+│   │   ├── auth.test.tsx   # Auth unit tests
+│   │   └── auth.integration.test.tsx  # Auth integration tests (planned)
 │   ├── App.tsx             # Main application component
 │   ├── main.tsx            # Entry point
 │   └── index.css           # Global styles (Tailwind)

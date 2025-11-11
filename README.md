@@ -104,17 +104,26 @@ cdk outputs
 
 ### Local Testing
 
+**Note:** Use a Python virtual environment for local testing.
+
 ```bash
-# Test API Lambda locally (requires AWS credentials)
+# Setup virtual environment (first time)
+python3 -m venv venv
+source venv/bin/activate
+pip install --upgrade pip
+
+# Test API Lambda
 cd lambda/api
 pip install -r requirements.txt
-python -m pytest
+PYTHONPATH=. pytest -v
 
 # Test processor Lambda
 cd ../processor
 pip install -r requirements.txt
-python -m pytest
+PYTHONPATH=. pytest -v
 ```
+
+See `lambda/api/tests/README.md` for detailed test setup instructions.
 
 ## API Endpoints
 

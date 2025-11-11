@@ -11,6 +11,7 @@ import * as lambdaEventSources from 'aws-cdk-lib/aws-lambda-event-sources';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as cloudwatchActions from 'aws-cdk-lib/aws-cloudwatch-actions';
 import * as sns from 'aws-cdk-lib/aws-sns';
+import * as cognito from 'aws-cdk-lib/aws-cognito';
 import * as path from 'path';
 
 export class VocabRecommendationStack extends cdk.Stack {
@@ -66,6 +67,15 @@ export class VocabRecommendationStack extends cdk.Stack {
       encryption: dynamodb.TableEncryption.AWS_MANAGED,
     });
 
+    // DynamoDB Table for teachers (Epic 6)
+    const teachersTable = new dynamodb.Table(this, 'Teachers', {
+      tableName: 'VincentVocabTeachers',
+      partitionKey: { name: 'teacher_id', type: dynamodb.AttributeType.STRING },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      encryption: dynamodb.TableEncryption.AWS_MANAGED,
+    });
+
     // IAM Role for API Lambda (will be used in Epic 2)
     const apiLambdaRole = new iam.Role(this, 'ApiLambdaRole', {
       roleName: 'vincent-vocab-api-lambda-role',
@@ -79,6 +89,7 @@ export class VocabRecommendationStack extends cdk.Stack {
     // Grant permissions for API Lambda
     essaysBucket.grantReadWrite(apiLambdaRole);
     metricsTable.grantReadWriteData(apiLambdaRole);
+    teachersTable.grantReadWriteData(apiLambdaRole);
     processingQueue.grantSendMessages(apiLambdaRole);
 
     // IAM Role for S3 Upload Lambda (will be used in Epic 2)
@@ -124,6 +135,50 @@ export class VocabRecommendationStack extends cdk.Stack {
       })
     );
 
+    // ============================================
+    // Cognito User Pool (Epic 6) - Must be before API Lambda
+    // ============================================
+
+    // Cognito User Pool for teacher authentication
+    const userPool = new cognito.UserPool(this, 'VocabTeachersPool', {
+      userPoolName: 'vincent-vocab-teachers-pool',
+      signInAliases: {
+        email: true,
+        username: false,
+      },
+      autoVerify: {
+        email: true,
+      },
+      passwordPolicy: {
+        minLength: 8,
+        requireLowercase: true,
+        requireUppercase: true,
+        requireDigits: true,
+        requireSymbols: false,
+      },
+      removalPolicy: cdk.RemovalPolicy.DESTROY, // For PoC
+      mfa: cognito.Mfa.OFF, // No MFA for PoC
+    });
+
+    // Cognito User Pool Client for frontend
+    const userPoolClient = new cognito.UserPoolClient(this, 'VocabTeachersPoolClient', {
+      userPool,
+      userPoolClientName: 'vincent-vocab-teachers-client',
+      generateSecret: false, // Public client for frontend
+      authFlows: {
+        userPassword: true, // Allow username/password auth
+        userSrp: true, // Allow SRP auth
+      },
+      preventUserExistenceErrors: true, // Security best practice
+    });
+
+    // Cognito User Pool Domain (for Hosted UI)
+    const userPoolDomain = userPool.addDomain('VocabTeachersPoolDomain', {
+      cognitoDomain: {
+        domainPrefix: `vincent-vocab-${this.account}`, // Must be globally unique
+      },
+    });
+
     // API Lambda Function
     // Skip bundling in test environment (Docker not available)
     const apiLambdaCode = process.env.CDK_SKIP_BUNDLING === 'true'
@@ -148,7 +203,10 @@ export class VocabRecommendationStack extends cdk.Stack {
       environment: {
         ESSAYS_BUCKET: essaysBucket.bucketName,
         METRICS_TABLE: metricsTable.tableName,
+        TEACHERS_TABLE: teachersTable.tableName,
         PROCESSING_QUEUE_URL: processingQueue.queueUrl,
+        COGNITO_USER_POOL_ID: userPool.userPoolId,
+        COGNITO_REGION: this.region,
       },
     });
 
@@ -196,20 +254,50 @@ export class VocabRecommendationStack extends cdk.Stack {
       },
     });
 
+    // Cognito Authorizer for API Gateway
+    const cognitoAuthorizer = new apigateway.CognitoUserPoolsAuthorizer(this, 'CognitoAuthorizer', {
+      cognitoUserPools: [userPool],
+      authorizerName: 'vincent-vocab-cognito-authorizer',
+      identitySource: 'method.request.header.Authorization',
+    });
+
     // API Gateway Integration
     const apiIntegration = new apigateway.LambdaIntegration(apiLambda);
 
-    // POST /essay endpoint
-    const essayResource = api.root.addResource('essay');
-    essayResource.addMethod('POST', apiIntegration);
-
-    // GET /essay/{essay_id} endpoint
-    const essayIdResource = essayResource.addResource('{essay_id}');
-    essayIdResource.addMethod('GET', apiIntegration);
-
-    // Health check endpoint
+    // Health check endpoint (public, no auth required)
     const healthResource = api.root.addResource('health');
     healthResource.addMethod('GET', apiIntegration);
+
+    // Auth endpoint (public, no auth required for /auth/health)
+    const authResource = api.root.addResource('auth');
+    const authHealthResource = authResource.addResource('health');
+    authHealthResource.addMethod('GET', apiIntegration);
+
+    // Protected endpoints (require Cognito authentication)
+    const authorizerOptions = {
+      authorizer: cognitoAuthorizer,
+      authorizationType: apigateway.AuthorizationType.COGNITO,
+    };
+
+    // POST /essay endpoint (protected)
+    const essayResource = api.root.addResource('essay');
+    essayResource.addMethod('POST', apiIntegration, authorizerOptions);
+
+    // GET /essay/{essay_id} endpoint (protected)
+    const essayIdResource = essayResource.addResource('{essay_id}');
+    essayIdResource.addMethod('GET', apiIntegration, authorizerOptions);
+
+    // Students endpoints (protected) - will be added in Epic 7
+    const studentsResource = api.root.addResource('students');
+    // Will add methods in Epic 7
+
+    // Assignments endpoints (protected) - will be added in Epic 7
+    const assignmentsResource = api.root.addResource('assignments');
+    // Will add methods in Epic 7
+
+    // Metrics endpoints (protected) - will be added in Epic 8
+    const metricsResource = api.root.addResource('metrics');
+    // Will add methods in Epic 8
 
     // Processor Lambda Function (Container Image)
     // Using container image instead of layer due to size limits (spaCy + model > 250MB)
@@ -352,6 +440,12 @@ export class VocabRecommendationStack extends cdk.Stack {
       exportName: 'MetricsTableName',
     });
 
+    new cdk.CfnOutput(this, 'TeachersTableName', {
+      value: teachersTable.tableName,
+      description: 'DynamoDB table name for teachers',
+      exportName: 'TeachersTableName',
+    });
+
     new cdk.CfnOutput(this, 'ApiLambdaRoleArn', {
       value: apiLambdaRole.roleArn,
       description: 'IAM role ARN for API Lambda',
@@ -386,6 +480,34 @@ export class VocabRecommendationStack extends cdk.Stack {
       value: alarmTopic.topicArn,
       description: 'SNS topic ARN for CloudWatch alarm notifications',
       exportName: 'AlarmTopicArn',
+    });
+
+    // ============================================
+    // Cognito Outputs (Epic 6)
+    // ============================================
+
+    new cdk.CfnOutput(this, 'CognitoUserPoolId', {
+      value: userPool.userPoolId,
+      description: 'Cognito User Pool ID for teacher authentication',
+      exportName: 'CognitoUserPoolId',
+    });
+
+    new cdk.CfnOutput(this, 'CognitoUserPoolClientId', {
+      value: userPoolClient.userPoolClientId,
+      description: 'Cognito User Pool Client ID for frontend',
+      exportName: 'CognitoUserPoolClientId',
+    });
+
+    new cdk.CfnOutput(this, 'CognitoRegion', {
+      value: this.region,
+      description: 'AWS region for Cognito',
+      exportName: 'CognitoRegion',
+    });
+
+    new cdk.CfnOutput(this, 'CognitoHostedUiUrl', {
+      value: `https://${userPoolDomain.domainName}.auth.${this.region}.amazoncognito.com`,
+      description: 'Cognito Hosted UI URL',
+      exportName: 'CognitoHostedUiUrl',
     });
   }
 }

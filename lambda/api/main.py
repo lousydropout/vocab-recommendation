@@ -3,10 +3,13 @@ import uuid
 import boto3
 import logging
 from datetime import datetime
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional
+
+from app.deps import get_teacher_context, TeacherContext
+from app.db.teachers import get_or_create_teacher
 
 # Configure structured logging
 logger = logging.getLogger()
@@ -47,7 +50,10 @@ class EssayResponse(BaseModel):
 
 
 @app.post("/essay", response_model=EssayResponse)
-async def create_essay(request: EssayUploadRequest):
+async def create_essay(
+    request: EssayUploadRequest,
+    teacher_ctx: TeacherContext = Depends(get_teacher_context)
+):
     """Create essay record and optionally generate presigned URL for upload"""
     essay_id = str(uuid.uuid4())
     file_key = f"essays/{essay_id}.txt"
@@ -55,6 +61,7 @@ async def create_essay(request: EssayUploadRequest):
     # Log upload received
     logger.info("Essay upload received", extra={
         "essay_id": essay_id,
+        "teacher_id": teacher_ctx.teacher_id,
         "has_text": bool(request.essay_text),
         "request_presigned_url": request.request_presigned_url,
         "text_length": len(request.essay_text) if request.essay_text else 0,
@@ -127,9 +134,15 @@ async def create_essay(request: EssayUploadRequest):
 
 
 @app.get("/essay/{essay_id}")
-async def get_essay(essay_id: str):
+async def get_essay(
+    essay_id: str,
+    teacher_ctx: TeacherContext = Depends(get_teacher_context)
+):
     """Retrieve essay analysis results"""
-    logger.info("Essay retrieval requested", extra={"essay_id": essay_id})
+    logger.info("Essay retrieval requested", extra={
+        "essay_id": essay_id,
+        "teacher_id": teacher_ctx.teacher_id,
+    })
     
     table = dynamodb.Table(METRICS_TABLE)
     
@@ -169,6 +182,44 @@ async def get_essay(essay_id: str):
 
 @app.get("/health")
 async def health():
-    """Health check endpoint"""
+    """Health check endpoint (public, no auth required)"""
     return {"status": "healthy"}
+
+
+@app.get("/auth/health")
+async def auth_health(teacher_ctx: TeacherContext = Depends(get_teacher_context)):
+    """
+    Auth health check endpoint.
+    Validates token and returns teacher information.
+    Ensures teacher record exists in DynamoDB (creates if missing).
+    """
+    try:
+        # Get or create teacher record
+        teacher = get_or_create_teacher(
+            teacher_id=teacher_ctx.teacher_id,
+            email=teacher_ctx.email,
+        )
+        
+        logger.info("Auth health check successful", extra={
+            "teacher_id": teacher_ctx.teacher_id,
+            "email": teacher_ctx.email,
+        })
+        
+        return {
+            "status": "authenticated",
+            "teacher_id": teacher_ctx.teacher_id,
+            "email": teacher.get('email') or teacher_ctx.email,
+            "name": teacher.get('name', ''),
+        }
+    except Exception as e:
+        logger.error("Failed to get or create teacher in auth health", extra={
+            "teacher_id": teacher_ctx.teacher_id,
+            "error": str(e),
+        }, exc_info=True)
+        # Still return auth success even if DB operation fails
+        return {
+            "status": "authenticated",
+            "teacher_id": teacher_ctx.teacher_id,
+            "email": teacher_ctx.email,
+        }
 

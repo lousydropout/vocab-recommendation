@@ -227,10 +227,24 @@ vocab_recommendation/
    - Form reset functionality
    - All tests passing ✅
 
-3. **Test Coverage**: 16/16 tests passing
+3. ✅ **Auth Unit Tests**: `__tests__/auth.test.tsx` (13 tests)
+   - Login/logout functions
+   - Token storage and retrieval
+   - Authentication status checks
+   - Error handling
+   - All tests passing ✅ (jsdom environment)
+
+4. **Test Coverage**: 29/29 tests passing (unit tests)
    - Framework: Vitest + React Testing Library
    - Mocking: API functions mocked for component tests
    - User interactions: Tested with `@testing-library/user-event`
+
+5. **Browser Integration Tests** (Planned)
+   - Setup: `@vitest/browser-playwright` with Chromium
+   - Configuration: `vite.config.ts` with browser provider
+   - Run with: `npm run test:browser`
+   - Use for: Full user flows (login, protected routes, API calls with tokens)
+   - Note: Browser tests require TypeScript transformation fixes (in progress)
 
 ## Epic 1 Implementation Details
 
@@ -290,6 +304,61 @@ All resource names and ARNs are exported as CloudFormation outputs for easy refe
 - **CDK Tests**: 25/25 passing (infrastructure validation)
 - **API Tests**: 6/6 passing (integration tests)
 - Test script: `test_api.py` for API endpoint validation
+
+## Epic 6 Implementation Details (Authentication & Teacher Management)
+
+### Cognito User Pool Setup
+- **User Pool Name:** `vincent-vocab-teachers-pool`
+- **Sign-in:** Email only (no username)
+- **Password Policy:** 8+ chars, uppercase, lowercase, digits, no symbols required
+- **MFA:** Disabled (for PoC)
+- **Auto-verify:** Email verification enabled
+- **User Pool ID:** `us-east-1_65hpvHpPX`
+- **Client ID:** `jhnvud4iqcf15vac6nc2d2b9p`
+- **Domain:** `vincent-vocab-971422717446.auth.us-east-1.amazoncognito.com`
+
+### API Gateway Authorizer
+- **Type:** Cognito User Pools Authorizer
+- **Identity Source:** `method.request.header.Authorization`
+- **Protected Routes:** All routes except `/health`
+- **Public Routes:** `/health` (no auth required)
+
+### JWT Validation
+- **Library:** `python-jose[cryptography]` for JWT verification
+- **JWKS:** Fetched from Cognito `.well-known/jwks.json` endpoint
+- **Caching:** JWKS cached in memory after first fetch
+- **Token Claims:** Extracts `sub` as `teacher_id`, `email` for display
+- **Validation:** Verifies signature, issuer, expiration
+
+### Teachers Table
+- **Table Name:** `VincentVocabTeachers`
+- **Partition Key:** `teacher_id` (String) - from Cognito `sub` claim
+- **Attributes:** `email`, `name`, `created_at`, `updated_at`
+- **Auto-creation:** Teacher records created on first `/auth/health` call
+
+### Code Structure Changes
+- **Issue:** Package conflict between `app.py` (FastAPI app) and `app/` (package directory)
+- **Solution:** Renamed `app.py` → `main.py` to avoid import conflicts
+- **Import Path:** `lambda_function.py` now imports `from main import app`
+- **Package Structure:**
+  ```
+  lambda/api/
+    ├── main.py (FastAPI app)
+    ├── lambda_function.py (Mangum handler)
+    ├── app/
+    │   ├── __init__.py
+    │   ├── auth.py (JWT verification)
+    │   ├── deps.py (FastAPI dependencies)
+    │   └── db/
+    │       ├── __init__.py
+    │       └── teachers.py (DynamoDB operations)
+  ```
+
+### Deployment Notes
+- **Deployment Time:** ~50 seconds
+- **Lambda Code Update:** CDK automatically bundles and uploads on `cdk deploy`
+- **Code SHA Changed:** Confirmed new code deployed (SHA: `nR0F60...`)
+- **Test Results:** 3/3 authentication tests passing
 
 ## Epic 4 Implementation Details
 

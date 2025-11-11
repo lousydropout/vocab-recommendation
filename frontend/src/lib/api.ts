@@ -1,4 +1,36 @@
+import { getToken } from './auth';
+
 const API_BASE_URL = import.meta.env.VITE_API_URL || "https://m18eg6bei9.execute-api.us-east-1.amazonaws.com/prod";
+
+/**
+ * Make an authenticated API request
+ */
+async function apiRequest(url: string, options: RequestInit = {}): Promise<Response> {
+  const token = await getToken();
+  
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...(options.headers as Record<string, string>),
+  };
+
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  const response = await fetch(url, {
+    ...options,
+    headers,
+  });
+
+  // Handle 401/403 - token might be expired
+  if (response.status === 401 || response.status === 403) {
+    // Clear invalid token
+    localStorage.removeItem('cognito_id_token');
+    throw new Error('Authentication required. Please log in again.');
+  }
+
+  return response;
+}
 
 export interface EssayResponse {
   essay_id: string;
@@ -26,11 +58,8 @@ export interface EssayResponse {
 }
 
 export async function uploadEssay(essayText: string): Promise<EssayResponse> {
-  const response = await fetch(`${API_BASE_URL}/essay`, {
+  const response = await apiRequest(`${API_BASE_URL}/essay`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
     body: JSON.stringify({ essay_text: essayText }),
   });
 
@@ -42,7 +71,7 @@ export async function uploadEssay(essayText: string): Promise<EssayResponse> {
 }
 
 export async function getEssay(essayId: string): Promise<EssayResponse> {
-  const response = await fetch(`${API_BASE_URL}/essay/${essayId}`);
+  const response = await apiRequest(`${API_BASE_URL}/essay/${essayId}`);
 
   if (!response.ok) {
     if (response.status === 404) {
@@ -58,6 +87,22 @@ export async function checkHealth(): Promise<{ status: string }> {
   const response = await fetch(`${API_BASE_URL}/health`);
   if (!response.ok) {
     throw new Error("Health check failed");
+  }
+  return response.json();
+}
+
+/**
+ * Check auth health (requires authentication)
+ */
+export async function checkAuthHealth(): Promise<{
+  status: string;
+  teacher_id: string;
+  email: string;
+  name?: string;
+}> {
+  const response = await apiRequest(`${API_BASE_URL}/auth/health`);
+  if (!response.ok) {
+    throw new Error("Auth health check failed");
   }
   return response.json();
 }

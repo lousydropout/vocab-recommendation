@@ -6,11 +6,62 @@
 https://{api-id}.execute-api.{region}.amazonaws.com/prod
 ```
 
+## Authentication
+
+All endpoints except `/health` require authentication via Cognito JWT token.
+
+**Authorization Header:**
+```
+Authorization: Bearer <cognito-id-token>
+```
+
+**Unauthenticated Requests:**
+- Return `401 Unauthorized` or `403 Forbidden`
+- `/health` endpoint is public (no auth required)
+
 ## Endpoints
+
+### GET /health
+
+Public health check endpoint (no authentication required).
+
+**Response** (200 OK):
+```json
+{
+  "status": "healthy"
+}
+```
+
+---
+
+### GET /auth/health
+
+Auth health check endpoint. Validates JWT token and ensures teacher record exists.
+
+**Headers:**
+- `Authorization: Bearer <token>` (required)
+
+**Response** (200 OK):
+```json
+{
+  "status": "authenticated",
+  "teacher_id": "uuid-from-cognito-sub",
+  "email": "teacher@example.com",
+  "name": "Teacher Name"
+}
+```
+
+**Response** (401/403 Unauthorized):
+- Missing or invalid token
+
+---
 
 ### POST /essay
 
 Create a new essay analysis request.
+
+**Headers:**
+- `Authorization: Bearer <token>` (required)
 
 **Request Body** (Option 1 - Direct Upload):
 ```json
@@ -48,6 +99,9 @@ Create a new essay analysis request.
 ### GET /essay/{essay_id}
 
 Retrieve essay analysis results.
+
+**Headers:**
+- `Authorization: Bearer <token>` (required)
 
 **Path Parameters**:
 - `essay_id` (string, required): UUID of the essay
@@ -114,6 +168,8 @@ All errors follow this format:
 **Status Codes**:
 - `200`: Success
 - `400`: Bad Request (invalid input)
+- `401`: Unauthorized (missing or invalid token)
+- `403`: Forbidden (token valid but insufficient permissions)
 - `404`: Not Found (essay_id doesn't exist)
 - `500`: Internal Server Error
 

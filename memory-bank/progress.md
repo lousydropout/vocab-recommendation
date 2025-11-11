@@ -269,17 +269,33 @@
 
 ### 🔄 Epic 6 — Authentication & Teacher Management - IN PROGRESS
 
-**Status:** Not Started
+**Status:** Partially Complete (Tasks 6.1-6.3 Done, 6.4-6.5 Pending)
 
 **Goal:** Add secure teacher login and protect APIs with JWT.
 
-**Key Tasks:**
-- Add AWS Cognito User Pool `VocabTeachersPool`
-- Update API Gateway with Cognito Authorizer
-- Add `Teachers` table for metadata
-- Modify existing Lambdas to require decoded JWT → inject `teacher_id`
-- Add `/auth/health` endpoint for token validation
-- Frontend: Add login page and token management
+**Completed Tasks (6.1-6.3):**
+- ✅ Added AWS Cognito User Pool `VocabTeachersPool` with email sign-in
+- ✅ Created Cognito User Pool Client and Domain (Hosted UI)
+- ✅ Updated API Gateway with Cognito Authorizer
+- ✅ Added `Teachers` DynamoDB table (PK: `teacher_id`)
+- ✅ Modified API Lambda to require decoded JWT → inject `teacher_id`
+- ✅ Added JWT validation middleware (`app/auth.py`, `app/deps.py`)
+- ✅ Added `/auth/health` endpoint for token validation and teacher record creation
+- ✅ Fixed import issue (renamed `app.py` → `main.py` to avoid package conflict)
+- ✅ Deployed and tested - all authentication endpoints working
+
+**Pending Tasks (6.4-6.5):**
+- ✅ Frontend: Add login page and token management (COMPLETE)
+- ✅ Frontend: Add logout button and route guards (COMPLETE)
+- ✅ Tests: Add unit tests for authentication (COMPLETE - 18 backend, 13 frontend)
+- ⏳ Tests: Add frontend integration tests (browser-based, setup complete)
+
+**Deployment:**
+- ✅ **Deployed:** 2025-11-11
+- **Cognito User Pool ID:** `us-east-1_65hpvHpPX`
+- **Cognito Client ID:** `jhnvud4iqcf15vac6nc2d2b9p`
+- **API Gateway:** All routes protected with Cognito authorizer
+- **Test Results:** 3/3 tests passing (public health, protected endpoints, auth health)
 
 ---
 
@@ -318,10 +334,12 @@
 ## Next Steps
 
 1. ✅ **Stack Renamed & Redeployed**: All resources now prefixed with `vincent-vocab-`
-2. **Epic 6:** Implement Cognito authentication and teacher management
-3. **Epic 7:** Implement student/assignment management and batch uploads
-4. **Epic 8:** Implement analytics dashboards and teacher override functionality
-5. Deploy frontend to production (S3 + CloudFront, or Vercel/Netlify)
-6. Configure SNS topic subscriptions (email, Slack, etc.) for alarm notifications
-7. Monitor CloudWatch Logs to verify structured logging is working
+2. ✅ **Epic 6 (Backend):** Cognito authentication and teacher management - COMPLETE
+3. ⏳ **Epic 6 (Frontend):** Add login/logout UI and token management (Task 6.4)
+4. ⏳ **Epic 6 (Tests):** Add unit and integration tests (Task 6.5)
+5. ⏳ **Epic 7:** Implement student/assignment management and batch uploads
+6. ⏳ **Epic 8:** Implement analytics dashboards and teacher override functionality
+7. Deploy frontend to production (S3 + CloudFront, or Vercel/Netlify)
+8. Configure SNS topic subscriptions (email, Slack, etc.) for alarm notifications
+9. Monitor CloudWatch Logs to verify structured logging is working
 

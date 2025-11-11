@@ -124,13 +124,30 @@ pytest -q lambda/api/tests/test_auth.py
 
 **Files**
 
-* `lambda/api/tests/test_jwt.py`
+* `lambda/api/tests/test_jwt.py` - Backend unit tests (18/18 passing)
 
-* `frontend/src/__tests__/auth.test.tsx`
+* `frontend/src/__tests__/auth.test.tsx` - Frontend unit tests (13/13 passing with jsdom)
+
+* `test_auth.py` - Backend API integration tests (401/403/200 flows)
+
+* `frontend/src/__tests__/auth.integration.test.tsx` - Frontend integration tests (planned, use browser)
+
+**Testing Strategy**
+
+* **Unit Tests**: Use jsdom environment for fast, isolated tests
+  - Run with: `npm test` (default)
+  - Tests auth functions, token management, API client
+
+* **Integration Tests**: Use browser environment for full user flows
+  - Run with: `npm run test:browser`
+  - Tests complete login flow, protected routes, API calls with tokens
+  - Browser setup: `@vitest/browser-playwright` with Chromium
 
 **Acceptance**
 
 * All tests pass locally and in CI.
+* Unit tests: Fast execution with jsdom
+* Integration tests: Real browser environment for user flows
 
 ---
 
