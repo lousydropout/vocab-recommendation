@@ -23,6 +23,14 @@ vocab_recommendation/
 │       ├── processor.py
 │       ├── requirements.txt
 │       └── Dockerfile                   # Docker container for spaCy
+├── frontend/                             # ✅ Epic 4
+│   ├── src/
+│   │   ├── components/ui/               # shadcn/ui components
+│   │   ├── lib/                         # API client, utils
+│   │   ├── App.tsx                      # Main application
+│   │   └── test/                        # Test setup
+│   ├── components.json                  # shadcn/ui config
+│   └── package.json
 ├── test/
 │   ├── vocab_recommendation.test.ts     # ✅ CDK unit tests
 │   ├── test_api.py                      # ✅ API integration tests
@@ -112,6 +120,17 @@ vocab_recommendation/
 4. ✅ Fix DynamoDB compatibility issues (float/Decimal, reserved keywords)
 5. ✅ End-to-end testing complete (`test_processing.py`)
 
+### Epic 4: Frontend ✅
+1. ✅ Initialize React project with Vite + TypeScript
+2. ✅ Set up Tailwind CSS v4 with PostCSS
+3. ✅ Initialize shadcn/ui and install components
+4. ✅ Create essay upload interface
+5. ✅ Implement processing status polling
+6. ✅ Build metrics and feedback display
+7. ✅ Configure API integration
+8. ✅ Create comprehensive test suite (16/16 passing)
+9. ✅ Convert to shadcn/ui components (Button, Card, Alert, Textarea)
+
 ## Common Issues
 
 ### spaCy Model Not Found
@@ -188,6 +207,31 @@ vocab_recommendation/
 3. ⏳ **Load Tests**: Verify < 60s end-to-end latency (validated in integration test)
 4. ⏳ **Error Tests**: Test DLQ, timeout, and error scenarios (future enhancement)
 
+### Frontend Tests ✅
+1. ✅ **API Client Tests**: `lib/api.test.ts` (4 tests)
+   - Upload essay functionality
+   - Get essay functionality
+   - Health check
+   - Error handling (404, network errors)
+   - All tests passing ✅
+
+2. ✅ **Component Tests**: `App.test.tsx` (12 tests)
+   - Initial render and form display
+   - Button enable/disable logic
+   - Empty text validation
+   - Essay upload flow
+   - Processing status display
+   - Metrics display
+   - Feedback display
+   - Error handling
+   - Form reset functionality
+   - All tests passing ✅
+
+3. **Test Coverage**: 16/16 tests passing
+   - Framework: Vitest + React Testing Library
+   - Mocking: API functions mocked for component tests
+   - User interactions: Tested with `@testing-library/user-event`
+
 ## Epic 1 Implementation Details
 
 ### Resources Created
@@ -246,4 +290,49 @@ All resource names and ARNs are exported as CloudFormation outputs for easy refe
 - **CDK Tests**: 25/25 passing (infrastructure validation)
 - **API Tests**: 6/6 passing (integration tests)
 - Test script: `test_api.py` for API endpoint validation
+
+## Epic 4 Implementation Details
+
+### Frontend Application
+- **Framework**: React 19 with TypeScript
+- **Build Tool**: Vite 7.2
+- **Styling**: Tailwind CSS v4 with shadcn/ui components
+- **Testing**: Vitest + React Testing Library
+
+### shadcn/ui Setup
+- **Configuration**: `components.json` with path aliases
+- **Components Installed**:
+  - `Button` - Primary actions with variants (default, secondary, destructive)
+  - `Card` - Content containers with header, title, content sections
+  - `Alert` - Status messages and error displays
+  - `Textarea` - Essay text input with proper styling
+- **Dependencies**: `@radix-ui/react-slot` for Button component
+
+### Tailwind CSS v4 Configuration
+- **PostCSS Plugin**: `@tailwindcss/postcss`
+- **Theme System**: CSS variables defined in `@theme` block
+- **Color Palette**: shadcn/ui default colors (slate base)
+- **Custom Colors**: background, foreground, primary, secondary, muted, destructive, etc.
+
+### Application Features
+- **Essay Upload**: Textarea input with validation
+- **Processing Status**: Real-time polling (3-second intervals) with visual indicators
+- **Metrics Display**: Word count, unique words, type-token ratio, POS distribution
+- **Feedback Display**: Word-level feedback with color-coded correctness
+- **Error Handling**: User-friendly error messages
+- **Form Reset**: "Analyze Another Essay" functionality
+
+### API Integration
+- **Client Module**: `lib/api.ts` with typed interfaces
+- **Endpoints**: `uploadEssay()`, `getEssay()`, `checkHealth()`
+- **Environment**: Configurable API URL via `VITE_API_URL`
+- **Error Handling**: Proper error messages and status codes
+
+### Testing
+- **Test Framework**: Vitest with jsdom environment
+- **Test Files**: 
+  - `lib/api.test.ts` - API client tests (4 tests)
+  - `App.test.tsx` - Component tests (12 tests)
+- **Coverage**: 16/16 tests passing
+- **Test Types**: Unit tests, integration tests, user interaction tests
 

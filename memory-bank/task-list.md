@@ -157,18 +157,68 @@
 
 ---
 
-## 🔍 **Epic 4: Frontend (React + Tailwind + shadcn/ui)**
+## 🔍 **Epic 4: Frontend (React + Tailwind + shadcn/ui)** ✅ **COMPLETE**
 
 **Goal:** Provide a minimal web UI.
 
 ### Tasks
 
-1. Build simple page with:
-   * File upload → POST to `/essay`
-   * "Processing…" indicator
-   * Report view (poll `/essay/{id}` until `status=processed`)
+1. ✅ **Initialize React project with Vite**
+   - Created React + TypeScript project
+   - Configured Vite build tooling
+   - Set up path aliases (`@/*` → `./src/*`)
 
-2. Render metrics summary and feedback list.
+2. ✅ **Set up Tailwind CSS configuration**
+   - Installed Tailwind CSS v4
+   - Configured `@tailwindcss/postcss` plugin
+   - Set up CSS variables for theming
+
+3. ✅ **Set up shadcn/ui components**
+   - Initialized shadcn/ui with `components.json`
+   - Installed components: Button, Card, Alert, Textarea
+   - Configured component aliases and paths
+
+4. ✅ **Create essay upload component**
+   - Implemented textarea input for essay text
+   - Form validation (empty text check)
+   - Submit button with loading state
+   - Error message display
+
+5. ✅ **Implement processing status indicator with polling**
+   - Real-time status updates (polling every 3 seconds)
+   - Visual indicators for: awaiting_processing, processing, processed
+   - Loading spinners and status messages
+
+6. ✅ **Create results view with metrics and feedback display**
+   - Metrics dashboard: word count, unique words, type-token ratio, POS distribution
+   - Word-level feedback with color-coded correctness
+   - Card-based layout using shadcn/ui components
+
+7. ✅ **Configure API endpoint connection**
+   - API client module (`lib/api.ts`)
+   - Environment variable support for API URL
+   - Error handling and type safety
+
+8. ✅ **Test end-to-end frontend flow**
+   - Created comprehensive test suite (16 tests)
+   - API client tests (4 tests)
+   - Component integration tests (12 tests)
+   - All tests passing ✅
+
+**Components Used:**
+- `Button` - Submit and reset actions
+- `Card`, `CardHeader`, `CardTitle`, `CardContent` - Content containers
+- `Alert`, `AlertDescription` - Status and error messages
+- `Textarea` - Essay text input
+
+**Testing:**
+- Vitest + React Testing Library
+- 16/16 tests passing
+- Coverage: API client, form validation, upload flow, metrics display, feedback display, error handling
+
+**Build:**
+- Production build successful
+- Bundle optimized and ready for deployment
 
 ---
 

@@ -28,8 +28,9 @@ vocab_recommendation/
 ├── lib/                    # CDK stack definitions
 ├── lambda/                 # Python Lambda functions
 │   ├── api/               # FastAPI handler
-│   └── processor/         # Essay processing logic
-├── layers/                 # Lambda layers (spaCy)
+│   ├── s3_upload_trigger/ # S3 event trigger
+│   └── processor/         # Essay processing (Docker container)
+├── frontend/               # React frontend application
 ├── memory-bank/            # Project documentation and decisions
 └── test/                   # Unit tests
 ```
@@ -65,19 +66,17 @@ npm install
 npm run build
 ```
 
-### Building spaCy Lambda Layer
+### Frontend Development
 
-Before deploying, you must build the spaCy Lambda layer:
+The frontend is a React application built with Vite:
 
 ```bash
-# Build the layer (requires Docker)
-./build_spacy_layer.sh
-
-# This creates the layer/ directory with spaCy and en_core_web_sm model
-# The layer will be packaged and deployed with the CDK stack
+cd frontend
+npm install
+npm run dev
 ```
 
-**Note**: The build script uses Docker to match the Lambda runtime environment (Amazon Linux + Python 3.12).
+See [`frontend/README.md`](frontend/README.md) for detailed frontend documentation.
 
 ### Deployment
 
@@ -126,7 +125,7 @@ See [`memory-bank/api-spec.md`](memory-bank/api-spec.md) for detailed API docume
 
 ## Status
 
-🚧 **In Development** - Following the task list in Epic 1-5:
+✅ **Epic 1-4 Complete** - Following the task list in Epic 1-5:
 - [x] Epic 1: Infrastructure Setup (AWS CDK) ✅ **COMPLETE**
   - All AWS resources deployed (S3, DynamoDB, SQS, IAM roles)
   - 25 unit tests passing
@@ -136,8 +135,16 @@ See [`memory-bank/api-spec.md`](memory-bank/api-spec.md) for detailed API docume
   - API Gateway configured with 3 endpoints
   - 6/6 API integration tests passing
   - API URL: `https://3uyr4x1nta.execute-api.us-east-1.amazonaws.com/prod/`
-- [ ] Epic 3: Processing Pipeline (spaCy + Bedrock)
-- [ ] Epic 4: Frontend (React + Tailwind + shadcn/ui)
+- [x] Epic 3: Processing Pipeline (spaCy + Bedrock) ✅ **COMPLETE**
+  - Processor Lambda deployed as Docker container
+  - spaCy NLP analysis and Bedrock LLM integration working
+  - End-to-end processing test passing (~37s processing time)
+  - All bugs fixed (DynamoDB compatibility)
+- [x] Epic 4: Frontend (React + Tailwind) ✅ **COMPLETE**
+  - React application with essay upload interface
+  - Real-time processing status with polling
+  - Metrics and feedback display
+  - Ready for deployment
 - [ ] Epic 5: Observability
 
 ## License
