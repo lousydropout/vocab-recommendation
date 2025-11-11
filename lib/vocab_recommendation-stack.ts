@@ -114,6 +114,16 @@ export class VocabRecommendationStack extends cdk.Stack {
       encryption: dynamodb.TableEncryption.AWS_MANAGED,
     });
 
+    // StudentMetrics table for student-level rolling averages
+    const studentMetricsTable = new dynamodb.Table(this, 'StudentMetrics', {
+      tableName: 'VincentVocabStudentMetrics',
+      partitionKey: { name: 'teacher_id', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'student_id', type: dynamodb.AttributeType.STRING },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      encryption: dynamodb.TableEncryption.AWS_MANAGED,
+    });
+
     // IAM Role for API Lambda (will be used in Epic 2)
     const apiLambdaRole = new iam.Role(this, 'ApiLambdaRole', {
       roleName: 'vincent-vocab-api-lambda-role',
@@ -131,6 +141,7 @@ export class VocabRecommendationStack extends cdk.Stack {
     studentsTable.grantReadWriteData(apiLambdaRole);
     assignmentsTable.grantReadWriteData(apiLambdaRole);
     classMetricsTable.grantReadWriteData(apiLambdaRole);
+    studentMetricsTable.grantReadWriteData(apiLambdaRole);
     processingQueue.grantSendMessages(apiLambdaRole);
     essayUpdateQueue.grantSendMessages(apiLambdaRole);
 
@@ -252,6 +263,7 @@ export class VocabRecommendationStack extends cdk.Stack {
         STUDENTS_TABLE: studentsTable.tableName,
         ASSIGNMENTS_TABLE: assignmentsTable.tableName,
         CLASS_METRICS_TABLE: classMetricsTable.tableName,
+        STUDENT_METRICS_TABLE: studentMetricsTable.tableName,
         PROCESSING_QUEUE_URL: processingQueue.queueUrl,
         ESSAY_UPDATE_QUEUE_URL: essayUpdateQueue.queueUrl,
         COGNITO_USER_POOL_ID: userPool.userPoolId,
@@ -363,9 +375,20 @@ export class VocabRecommendationStack extends cdk.Stack {
     const assignmentUploadResource = assignmentIdResource.addResource('upload-url');
     assignmentUploadResource.addMethod('POST', apiIntegration, authorizerOptions); // Get presigned upload URL
 
-    // Metrics endpoints (protected) - will be added in Epic 8
+    // Metrics endpoints (protected) - Epic 8
     const metricsResource = api.root.addResource('metrics');
-    // Will add methods in Epic 8
+    const metricsClassResource = metricsResource.addResource('class');
+    const metricsClassIdResource = metricsClassResource.addResource('{assignment_id}');
+    metricsClassIdResource.addMethod('GET', apiIntegration, authorizerOptions); // Get class metrics
+    const metricsStudentResource = metricsResource.addResource('student');
+    const metricsStudentIdResource = metricsStudentResource.addResource('{student_id}');
+    metricsStudentIdResource.addMethod('GET', apiIntegration, authorizerOptions); // Get student metrics
+
+    // Essays endpoints (protected) - Epic 8
+    const essaysResource = api.root.addResource('essays');
+    const essayIdResourceOverride = essaysResource.addResource('{essay_id}');
+    const essayOverrideResource = essayIdResourceOverride.addResource('override');
+    essayOverrideResource.addMethod('PATCH', apiIntegration, authorizerOptions); // Override essay feedback
 
     // Processor Lambda Function (Container Image)
     // Using container image instead of layer due to size limits (spaCy + model > 250MB)
@@ -414,6 +437,7 @@ export class VocabRecommendationStack extends cdk.Stack {
     // Grant permissions for Aggregation Lambda
     metricsTable.grantReadData(aggregationLambdaRole);
     classMetricsTable.grantReadWriteData(aggregationLambdaRole);
+    studentMetricsTable.grantReadWriteData(aggregationLambdaRole);
     essayUpdateQueue.grantConsumeMessages(aggregationLambdaRole);
 
     // Aggregation Lambda Function (for ClassMetrics)
@@ -439,6 +463,7 @@ export class VocabRecommendationStack extends cdk.Stack {
       environment: {
         METRICS_TABLE: metricsTable.tableName,
         CLASS_METRICS_TABLE: classMetricsTable.tableName,
+        STUDENT_METRICS_TABLE: studentMetricsTable.tableName,
       },
     });
 
@@ -593,6 +618,12 @@ export class VocabRecommendationStack extends cdk.Stack {
       value: classMetricsTable.tableName,
       description: 'DynamoDB table name for class metrics',
       exportName: 'ClassMetricsTableName',
+    });
+
+    new cdk.CfnOutput(this, 'StudentMetricsTableName', {
+      value: studentMetricsTable.tableName,
+      description: 'DynamoDB table name for student metrics',
+      exportName: 'StudentMetricsTableName',
     });
 
     new cdk.CfnOutput(this, 'ApiLambdaRoleArn', {

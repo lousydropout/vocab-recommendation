@@ -1,96 +1,73 @@
-# Vocabulary Essay Analyzer - Frontend
+# React + TypeScript + Vite
 
-React + TypeScript frontend for the Vocabulary Essay Analyzer application.
+This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 
-## Features
+Currently, two official plugins are available:
 
-- **Essay Upload**: Paste essay text directly into the interface
-- **Real-time Processing Status**: Visual indicators for processing states
-- **Metrics Display**: Word count, unique words, type-token ratio, and POS distribution
-- **Word-Level Feedback**: Detailed feedback on vocabulary usage from Claude 3
+- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
+- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
 
-## Tech Stack
+## React Compiler
 
-- **React 19** with TypeScript
-- **Vite** for build tooling
-- **Tailwind CSS** for styling
-- **Lucide React** for icons
+The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
 
-## Getting Started
+## Expanding the ESLint configuration
 
-### Prerequisites
+If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
 
-- Node.js 18+ and npm
+```js
+export default defineConfig([
+  globalIgnores(['dist']),
+  {
+    files: ['**/*.{ts,tsx}'],
+    extends: [
+      // Other configs...
 
-### Installation
+      // Remove tseslint.configs.recommended and replace with this
+      tseslint.configs.recommendedTypeChecked,
+      // Alternatively, use this for stricter rules
+      tseslint.configs.strictTypeChecked,
+      // Optionally, add this for stylistic rules
+      tseslint.configs.stylisticTypeChecked,
 
-```bash
-npm install
+      // Other configs...
+    ],
+    languageOptions: {
+      parserOptions: {
+        project: ['./tsconfig.node.json', './tsconfig.app.json'],
+        tsconfigRootDir: import.meta.dirname,
+      },
+      // other options...
+    },
+  },
+])
 ```
 
-### Development
+You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
 
-```bash
-npm run dev
-```
+```js
+// eslint.config.js
+import reactX from 'eslint-plugin-react-x'
+import reactDom from 'eslint-plugin-react-dom'
 
-The app will be available at `http://localhost:5173`
-
-### Build
-
-```bash
-npm run build
-```
-
-### Environment Variables
-
-Create a `.env` file in the frontend directory:
-
-```env
-VITE_API_URL=https://m18eg6bei9.execute-api.us-east-1.amazonaws.com/prod
-```
-
-If not set, it defaults to the production API URL.
-
-## Usage
-
-1. Paste your essay text into the textarea
-2. Click "Analyze Essay"
-3. Wait for processing (typically ~30-40 seconds)
-4. View metrics and word-level feedback
-
-## Testing
-
-### Unit Tests
-Run fast unit tests with jsdom:
-```bash
-npm test
-```
-
-### Integration Tests (Browser)
-Run integration tests in a real browser:
-```bash
-npm run test:browser
-```
-
-**Note**: Browser tests use Playwright with Chromium. They test complete user flows like login, protected routes, and API calls with real tokens. Unit tests use jsdom for faster execution.
-
-See `memory-bank/testing-strategy.md` for detailed testing documentation.
-
-## Project Structure
-
-```
-frontend/
-├── src/
-│   ├── lib/
-│   │   ├── api.ts          # API client functions
-│   │   └── utils.ts        # Utility functions
-│   ├── __tests__/
-│   │   ├── auth.test.tsx   # Auth unit tests
-│   │   └── auth.integration.test.tsx  # Auth integration tests (planned)
-│   ├── App.tsx             # Main application component
-│   ├── main.tsx            # Entry point
-│   └── index.css           # Global styles (Tailwind)
-├── public/                 # Static assets
-└── package.json
+export default defineConfig([
+  globalIgnores(['dist']),
+  {
+    files: ['**/*.{ts,tsx}'],
+    extends: [
+      // Other configs...
+      // Enable lint rules for React
+      reactX.configs['recommended-typescript'],
+      // Enable lint rules for React DOM
+      reactDom.configs.recommended,
+    ],
+    languageOptions: {
+      parserOptions: {
+        project: ['./tsconfig.node.json', './tsconfig.app.json'],
+        tsconfigRootDir: import.meta.dirname,
+      },
+      // other options...
+    },
+  },
+])
 ```

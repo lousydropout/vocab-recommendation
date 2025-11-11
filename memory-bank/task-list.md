@@ -543,45 +543,86 @@
 
 ### Backend Tasks
 
-1. ⏳ **Add `StudentMetrics` table to store rolling averages per student**
+1. ✅ **Add `StudentMetrics` table to store rolling averages per student**
    - Partition key: `teacher_id`, Sort key: `student_id`
+   - Table name: `VincentVocabStudentMetrics`
+   - Stores: avg_ttr, avg_word_count, avg_unique_words, avg_freq_rank, total_essays, trend, last_essay_date
 
-2. ⏳ **Create aggregation Lambda (triggered by essay updates or daily schedule)**
-   - Compute student-level metrics over time
-   - Store in StudentMetrics table
+2. ✅ **Create aggregation Lambda (triggered by essay updates or daily schedule)**
+   - Student metrics aggregation: `lambda/aggregations/student_metrics.py`
+   - Computes rolling averages per student over time
+   - Stores in StudentMetrics table
+   - Triggered by EssayUpdateQueue messages
 
-3. ⏳ **Add `/metrics/class/{assignment_id}` and `/metrics/student/{student_id}` endpoints**
-   - Return pre-computed metrics from ClassMetrics and StudentMetrics tables
+3. ✅ **Add `/metrics/class/{assignment_id}` and `/metrics/student/{student_id}` endpoints**
+   - `/metrics/class/{assignment_id}` - Returns ClassMetrics for assignment
+   - `/metrics/student/{student_id}` - Returns StudentMetrics for student
+   - Implemented in `lambda/api/app/routes/metrics.py`
+   - Unit tests: `lambda/api/tests/test_metrics.py` (all passing)
 
-4. ⏳ **Add `/essays/{id}/override` endpoint:**
-   - Accept patch of word-level feedback
-   - Update EssayMetrics.feedback and re-compute aggregates
-   - Log overrides to CloudWatch for audit
+4. ✅ **Add `/essays/{id}/override` endpoint:**
+   - PATCH endpoint for word-level feedback overrides
+   - Updates EssayMetrics.feedback and triggers metric re-computation
+   - Sends message to EssayUpdateQueue for async aggregation
+   - Logs overrides to CloudWatch for audit
+   - Implemented in `lambda/api/app/routes/essays.py`
+   - Unit tests: `lambda/api/tests/test_essays.py` (all passing)
 
-5. ⏳ **Add new `EssayUpdateQueue` to decouple metric re-computation from API latency**
+5. ✅ **EssayUpdateQueue already exists** (from Epic 7)
    - Queue messages when feedback is overridden
    - Aggregation Lambda processes updates asynchronously
 
 ### Frontend Tasks
 
-1. ⏳ **Class Dashboard: charts for avg TTR, word difficulty, correctness distribution**
+1. ✅ **Class Dashboard: charts for avg TTR, word difficulty, correctness distribution**
+   - Component: `ClassDashboard.tsx`
+   - Displays assignment-level metrics with Recharts visualizations
+   - Shows average type-token ratio, word count, correctness distribution
+   - Navigation to individual essays
 
-2. ⏳ **Student Dashboard: time-series of metrics + essay list**
+2. ✅ **Student Dashboard: time-series of metrics + essay list**
+   - Component: `StudentDashboard.tsx`
+   - Displays student-level metrics over time
+   - Shows essay list with links to review pages
+   - Trend indicators (improving, stable, declining)
 
-3. ⏳ **Essay Review Page:**
-   - Show AI feedback by word (color-coded)
-   - Allow teacher to toggle correct/incorrect
-   - Submit changes to `/override` API
+3. ✅ **Essay Review Page:**
+   - Component: `EssayReview.tsx`
+   - Shows AI feedback by word (color-coded)
+   - Allows teacher to toggle correct/incorrect
+   - Submit changes to `/essays/{id}/override` API
+   - Real-time feedback updates
+
+4. ✅ **Main Dashboard:**
+   - Component: `Dashboard.tsx`
+   - Essay upload interface
+   - Navigation to assignments and students
+   - Processing status display
+
+5. ✅ **Authentication:**
+   - Component: `Login.tsx` - AWS Amplify authentication
+   - Component: `ProtectedRoute.tsx` - Route guards
+
+6. 🔄 **Frontend Migration:**
+   - Migrating from `frontend/` to `new_frontend/` with Bun + Vite
+   - Preserving Tailwind v4 CSS-first configuration
+   - Fixing TypeScript compilation errors
+   - All components migrated and building successfully
 
 ### Deliverables
 
-- Realtime class + student dashboards
-- Editable feedback view with audit logging
+- ✅ Realtime class + student dashboards
+- ✅ Editable feedback view with audit logging
+- 🔄 Frontend migration to new build system
 
 ### Tests
 
-- API integration: override updates propagate to aggregates
-- UI E2E: teacher changes feedback → refresh → persisted state visible
+- ✅ **Backend Unit Tests**: 
+  - `lambda/api/tests/test_metrics.py` - Class and student metrics (all passing)
+  - `lambda/api/tests/test_essays.py` - Essay override endpoint (all passing)
+- ✅ **Integration Tests**: 
+  - `test_epic8.py` - Class metrics, student metrics, essay override (all passing)
+- ⏳ **Frontend Tests**: To be set up in `new_frontend/`
 
 ---
 

@@ -532,23 +532,21 @@ describe('VocabRecommendationStack', () => {
     });
 
     test('ApiLambdaRole should have Students table permissions', () => {
-      const allResources = template.toJSON().Resources || {};
-      const apiRole = Object.values(allResources).find(
-        (resource: any) => 
-          resource.Type === 'AWS::IAM::Role' &&
-          resource.Properties?.RoleName === 'vincent-vocab-api-lambda-role'
-      );
-      expect(apiRole).toBeDefined();
-      // Verify it has DynamoDB permissions (check policy statements)
-      const role = apiRole as any;
-      const policies = role.Properties?.Policies || [];
-      const hasDynamoDBPermission = policies.some((policy: any) => 
-        policy.PolicyDocument?.Statement?.some((stmt: any) =>
-          stmt.Action?.includes('dynamodb:') || 
-          (Array.isArray(stmt.Action) && stmt.Action.some((action: string) => action.includes('dynamodb:')))
-        )
-      );
-      expect(hasDynamoDBPermission).toBe(true);
+      // Check that the policy contains DynamoDB permissions
+      // The grantReadWriteData method creates inline policies with DynamoDB actions
+      template.hasResourceProperties('AWS::IAM::Policy', {
+        PolicyDocument: {
+          Statement: Match.arrayWith([
+            Match.objectLike({
+              Effect: 'Allow',
+              Action: Match.arrayWith([
+                Match.stringLikeRegexp('dynamodb:.*'),
+              ]),
+            }),
+          ]),
+        },
+        PolicyName: Match.stringLikeRegexp('.*ApiLambdaRole.*'),
+      });
     });
 
     test('S3UploadLambdaRole should have Students table permissions', () => {

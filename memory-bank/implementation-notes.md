@@ -272,7 +272,7 @@ vocab_recommendation/
    - Error handling
    - All tests passing ✅ (jsdom environment)
 
-4. **Test Coverage**: 29/29 tests passing (unit tests)
+4. **Test Coverage**: 29/29 tests passing (unit tests in `frontend/`)
    - Framework: Vitest + React Testing Library
    - Mocking: API functions mocked for component tests
    - User interactions: Tested with `@testing-library/user-event`
@@ -282,7 +282,19 @@ vocab_recommendation/
    - Updated Vite config to handle `.js` files with JSX syntax
    - Build now completes successfully ✅
 
-6. **Browser Integration Tests** (Planned)
+6. 🔄 **Frontend Migration to `new_frontend/`** (2025-01-XX):
+   - **Reason**: Suspected configuration issues in original `frontend/` directory
+   - **New Stack**: Bun runtime + Vite 7.2 + React 19 + TypeScript
+   - **Configuration Preserved**: Tailwind v4 CSS-first config (`@theme` in `index.css`)
+   - **TypeScript Fixes**:
+     - Added `declare const process` block for `process.env` type support
+     - Fixed `verbatimModuleSyntax` errors by using `import type` for type-only imports
+     - Fixed missing icon imports (`CheckCircle2` from lucide-react)
+   - **Files Migrated**: All pages, components, lib files, config
+   - **Build Status**: TypeScript compilation successful, all errors resolved
+   - **Test Status**: Frontend tests to be set up in `new_frontend/`
+
+7. **Browser Integration Tests** (Planned)
    - Setup: `@vitest/browser-playwright` with Chromium
    - Configuration: `vite.config.ts` with browser provider
    - Run with: `npm run test:browser`
@@ -344,8 +356,16 @@ All resource names and ARNs are exported as CloudFormation outputs for easy refe
 - Dependencies automatically installed during deployment
 
 ### Testing
-- **CDK Tests**: 25/25 passing (infrastructure validation)
-- **API Tests**: 6/6 passing (integration tests)
+- **CDK Tests**: 52/54 passing (2 skipped, infrastructure validation)
+- **Backend Python Tests**: 49/49 passing (JWT, Students, Assignments, Essays, Metrics)
+- **Name Extraction Tests**: 13/13 passing
+- **Integration Tests**: 
+  - `test_auth.py`: 3/3 passing
+  - `test_epic7.py`: Passing (requires auth token for full tests)
+  - `test_epic8.py`: All passing (Class metrics, Student metrics, Essay override)
+  - `test_processing.py`: Passing
+  - `test_assignment_flow.py`: Passing
+  - `test_api.py`: 1/6 passing (expected - requires auth token)
 - Test script: `test_api.py` for API endpoint validation
 
 ## Epic 6 Implementation Details (Authentication & Teacher Management)
@@ -396,6 +416,9 @@ All resource names and ARNs are exported as CloudFormation outputs for easy refe
     │   ├── __init__.py
     │   ├── auth.py (JWT verification)
     │   ├── deps.py (FastAPI dependencies)
+    │   ├── routes/
+    │   │   ├── essays.py (Essay override endpoint)
+    │   │   └── metrics.py (Class and student metrics endpoints)
     │   └── db/
     │       ├── __init__.py
     │       └── teachers.py (DynamoDB operations)
@@ -407,13 +430,43 @@ All resource names and ARNs are exported as CloudFormation outputs for easy refe
 - **Code SHA Changed:** Confirmed new code deployed (SHA: `nR0F60...`)
 - **Test Results:** 3/3 authentication tests passing
 
+## Epic 8 Implementation Details (Analytics & Teacher Review Interface)
+
+### Backend Implementation
+- **StudentMetrics Table**: Created with partition key `teacher_id`, sort key `student_id`
+- **Metrics Endpoints**: 
+  - `/metrics/class/{assignment_id}` - Returns ClassMetrics for assignment
+  - `/metrics/student/{student_id}` - Returns StudentMetrics for student
+- **Essay Override Endpoint**: `/essays/{id}/override` (PATCH) - Updates feedback and triggers aggregation
+- **Aggregation Lambdas**: 
+  - `class_metrics.py` - Computes assignment-level averages
+  - `student_metrics.py` - Computes student-level rolling averages
+- **Testing**: All unit and integration tests passing
+
+### Frontend Implementation
+- **Class Dashboard**: Displays assignment-level metrics with Recharts visualizations
+- **Student Dashboard**: Shows student-level metrics over time with essay list
+- **Essay Review Page**: Editable feedback view with override toggles
+- **Main Dashboard**: Essay upload interface with navigation
+- **Authentication**: AWS Amplify integration with protected routes
+
+### Frontend Migration (2025-01-XX)
+- **New Directory**: `new_frontend/` with Bun + Vite 7.2
+- **Configuration**: Preserved Tailwind v4 CSS-first config
+- **TypeScript Fixes**: 
+  - Added `declare const process` for environment variable types
+  - Fixed `verbatimModuleSyntax` with `import type` statements
+  - Fixed missing icon imports
+- **Build Status**: All TypeScript errors resolved, compilation successful
+
 ## Epic 4 Implementation Details
 
 ### Frontend Application
 - **Framework**: React 19 with TypeScript
-- **Build Tool**: Vite 7.2
+- **Build Tool**: Vite 7.2 (migrated to Bun runtime in `new_frontend/`)
 - **Styling**: Tailwind CSS v4 with shadcn/ui components
 - **Testing**: Vitest + React Testing Library
+- **Migration**: Frontend migrated from `frontend/` to `new_frontend/` (2025-01-XX)
 
 ### shadcn/ui Setup
 - **Configuration**: `components.json` with path aliases

@@ -7,9 +7,11 @@ import {
   type SignInOutput,
 } from 'aws-amplify/auth';
 
+import { config } from '../config';
+
 // Cognito configuration from CDK outputs
-const COGNITO_USER_POOL_ID = import.meta.env.VITE_COGNITO_USER_POOL_ID || 'us-east-1_65hpvHpPX';
-const COGNITO_USER_POOL_CLIENT_ID = import.meta.env.VITE_COGNITO_USER_POOL_CLIENT_ID || 'jhnvud4iqcf15vac6nc2d2b9p';
+const COGNITO_USER_POOL_ID = config.COGNITO_USER_POOL_ID;
+const COGNITO_USER_POOL_CLIENT_ID = config.COGNITO_USER_POOL_CLIENT_ID;
 
 // Configure Amplify
 Amplify.configure({
@@ -123,4 +125,3 @@ export async function getCurrentUserInfo() {
     return null;
   }
 }
-

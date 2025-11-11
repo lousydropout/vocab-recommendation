@@ -339,19 +339,67 @@
 
 ### 🔄 Epic 8 — Analytics & Teacher Review Interface - IN PROGRESS
 
-**Status:** Not Started
+**Status:** Backend Complete, Frontend Complete (Migration in Progress)
 
 **Goal:** Provide teachers with class- and student-level dashboards and the ability to override AI assessments.
 
-**Key Tasks:**
-- Add `StudentMetrics` table
-- Create aggregation Lambda for student-level metrics
-- Add `/metrics/class/{assignment_id}` and `/metrics/student/{student_id}` endpoints
-- Add `/essays/{id}/override` endpoint for feedback overrides
-- Add `EssayUpdateQueue` for metric re-computation
-- Frontend: Class dashboard, student dashboard, essay review page with override toggles
+**Completed (Backend):**
+- ✅ `StudentMetrics` DynamoDB table created (partition key: `teacher_id`, sort key: `student_id`)
+- ✅ Student metrics aggregation Lambda created (`student_metrics.py`)
+- ✅ `/metrics/class/{assignment_id}` endpoint implemented (returns ClassMetrics)
+- ✅ `/metrics/student/{student_id}` endpoint implemented (returns StudentMetrics)
+- ✅ `/essays/{id}/override` endpoint implemented (PATCH endpoint for feedback overrides)
+- ✅ `EssayUpdateQueue` already exists (from Epic 7) - used for metric re-computation
+- ✅ Integration tests: `test_epic8.py` (all passing)
+
+**Completed (Frontend):**
+- ✅ Class Dashboard (`ClassDashboard.tsx`) - displays assignment-level metrics with charts
+- ✅ Student Dashboard (`StudentDashboard.tsx`) - displays student-level metrics and essay list
+- ✅ Essay Review Page (`EssayReview.tsx`) - displays essay with override toggles for feedback
+- ✅ Dashboard (`Dashboard.tsx`) - main dashboard with navigation to assignments/students
+- ✅ Login page (`Login.tsx`) - AWS Amplify authentication
+- ✅ Protected routes (`ProtectedRoute.tsx`) - route guards for authentication
+
+**In Progress:**
+- 🔄 Frontend migration from `frontend/` to `new_frontend/` with Bun and Vite
+- 🔄 TypeScript compilation fixes and build configuration
 
 ---
+
+## Recent Updates (2025-11-11 to 2025-01-XX)
+
+### Frontend Migration (2025-01-XX)
+1. ✅ **Frontend Migration to `new_frontend/`**: Migrated React application from `frontend/` to `new_frontend/`
+   - **Reason**: Suspected configuration issues in original `frontend/` directory
+   - **New Stack**: Bun runtime + Vite 7.2 + React 19 + TypeScript
+   - **Configuration**: Preserved working Tailwind v4 CSS-first config (`@theme` in `index.css`)
+   - **Files Migrated**:
+     - All page components (Dashboard, Login, ClassDashboard, StudentDashboard, EssayReview)
+     - All UI components (Button, Card, Alert, Textarea, ProtectedRoute)
+     - All lib files (api.ts, auth.ts, utils.ts)
+     - Configuration (config.ts with support for `import.meta.env`, `process.env`, `window.__ENV__`)
+   - **TypeScript Fixes**:
+     - Fixed `process.env` type errors by adding `declare const process` block
+     - Fixed `verbatimModuleSyntax` errors by using `import type` for type-only imports
+     - Fixed missing icon imports (`CheckCircle2` from lucide-react)
+   - **Build Status**: TypeScript compilation successful, all errors resolved
+
+2. ✅ **CDK Test Fix**: Fixed failing test "ApiLambdaRole should have Students table permissions"
+   - **Issue**: Test was checking `Policies` array in IAM role, but CDK's `grantReadWriteData()` creates inline policies
+   - **Fix**: Updated test to use `template.hasResourceProperties('AWS::IAM::Policy', ...)` pattern matching inline policies
+   - **Result**: All 52 CDK tests passing (2 skipped)
+
+3. ✅ **Test Suite Execution**: Ran all test suites
+   - **CDK Tests**: 52 passed, 2 skipped (54 total)
+   - **Backend Python Tests**: 49/49 passing (JWT, Students, Assignments, Essays, Metrics)
+   - **Name Extraction Tests**: 13/13 passing
+   - **Integration Tests**: 
+     - `test_auth.py`: 3/3 passing
+     - `test_epic7.py`: Passing (requires auth token for full tests)
+     - `test_epic8.py`: All passing (Class metrics, Student metrics, Essay override)
+     - `test_processing.py`: Passing
+     - `test_assignment_flow.py`: Passing
+     - `test_api.py`: 1/6 passing (expected - requires auth token)
 
 ## Recent Updates (2025-11-11)
 
@@ -395,9 +443,11 @@
 2. ✅ **Epic 6 (Backend):** Cognito authentication and teacher management - COMPLETE
 3. ✅ **Epic 6 (Tests):** Unit and integration tests - COMPLETE
 4. ✅ **Epic 7 (Backend):** Student/assignment management and batch uploads - COMPLETE
-5. ⏳ **Epic 7 (Frontend):** Student management UI, assignment creation UI with batch upload
-6. ⏳ **Epic 8:** Implement analytics dashboards and teacher override functionality
-7. Deploy frontend to production (S3 + CloudFront, or Vercel/Netlify)
-8. Configure SNS topic subscriptions (email, Slack, etc.) for alarm notifications
-9. Monitor CloudWatch Logs to verify structured logging is working
+5. ✅ **Epic 8 (Backend):** Analytics endpoints and override functionality - COMPLETE
+6. ✅ **Epic 8 (Frontend):** Class dashboard, student dashboard, essay review page - COMPLETE
+7. 🔄 **Frontend Migration**: Complete migration from `frontend/` to `new_frontend/` (in progress)
+8. ⏳ **Frontend Testing**: Set up and run frontend tests in `new_frontend/`
+9. ⏳ **Frontend Deployment**: Deploy `new_frontend/` to production (S3 + CloudFront, or Vercel/Netlify)
+10. Configure SNS topic subscriptions (email, Slack, etc.) for alarm notifications
+11. Monitor CloudWatch Logs to verify structured logging is working
 
