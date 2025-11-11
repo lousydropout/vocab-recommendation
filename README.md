@@ -67,12 +67,17 @@ npm run build
 
 ### Building spaCy Lambda Layer
 
+Before deploying, you must build the spaCy Lambda layer:
+
 ```bash
-cd layers/spacy
-chmod +x build_layer.sh
-./build_layer.sh
-cd ../..
+# Build the layer (requires Docker)
+./build_spacy_layer.sh
+
+# This creates the layer/ directory with spaCy and en_core_web_sm model
+# The layer will be packaged and deployed with the CDK stack
 ```
+
+**Note**: The build script uses Docker to match the Lambda runtime environment (Amazon Linux + Python 3.12).
 
 ### Deployment
 

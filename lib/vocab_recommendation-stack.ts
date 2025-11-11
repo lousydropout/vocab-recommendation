@@ -7,6 +7,7 @@ import * as iam from 'aws-cdk-lib/aws-iam';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as s3n from 'aws-cdk-lib/aws-s3-notifications';
+import * as lambdaEventSources from 'aws-cdk-lib/aws-lambda-event-sources';
 import * as path from 'path';
 
 export class VocabRecommendationStack extends cdk.Stack {
@@ -202,6 +203,34 @@ export class VocabRecommendationStack extends cdk.Stack {
     const healthResource = api.root.addResource('health');
     healthResource.addMethod('GET', apiIntegration);
 
+    // Processor Lambda Function (Container Image)
+    // Using container image instead of layer due to size limits (spaCy + model > 250MB)
+    const processorLambda = new lambda.DockerImageFunction(this, 'ProcessorLambda', {
+      code: lambda.DockerImageCode.fromImageAsset(
+        path.join(__dirname, '../lambda/processor'),
+        {
+          // Dockerfile is in lambda/processor/Dockerfile
+        }
+      ),
+      role: processorLambdaRole,
+      timeout: cdk.Duration.minutes(5), // Must match SQS visibility timeout
+      memorySize: 3008, // High memory for spaCy model loading
+      environment: {
+        ESSAYS_BUCKET: essaysBucket.bucketName,
+        METRICS_TABLE: metricsTable.tableName,
+        BEDROCK_MODEL_ID: 'anthropic.claude-3-sonnet-20240229-v1:0',
+        // AWS_REGION is automatically set by Lambda runtime
+      },
+    });
+
+    // SQS Event Source for Processor Lambda
+    processorLambda.addEventSource(
+      new lambdaEventSources.SqsEventSource(processingQueue, {
+        batchSize: 1, // Process one essay at a time
+        maxBatchingWindow: cdk.Duration.seconds(0),
+      })
+    );
+
     // CloudFormation Outputs
     new cdk.CfnOutput(this, 'EssaysBucketName', {
       value: essaysBucket.bucketName,
@@ -243,6 +272,12 @@ export class VocabRecommendationStack extends cdk.Stack {
       value: api.url,
       description: 'API Gateway endpoint URL',
       exportName: 'ApiUrl',
+    });
+
+    new cdk.CfnOutput(this, 'ProcessorLambdaArn', {
+      value: processorLambda.functionArn,
+      description: 'Processor Lambda function ARN',
+      exportName: 'ProcessorLambdaArn',
     });
   }
 }

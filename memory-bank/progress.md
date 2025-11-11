@@ -63,16 +63,54 @@
 
 ---
 
-### ⏳ Epic 3: Processing Pipeline (spaCy + Bedrock) - PENDING
+### ✅ Epic 3: Processing Pipeline (spaCy + Bedrock) - COMPLETE
 
-**Status:** Not started
+**Completed:** 2025-11-11
 
-**Tasks:**
-- Build spaCy Lambda layer
-- Create processor Lambda
-- Implement spaCy analysis
-- Implement Bedrock integration
-- Configure SQS event source
+**Summary:**
+- Processor Lambda deployed as Docker container image
+- spaCy NLP analysis fully implemented
+- Bedrock LLM integration working
+- SQS event source configured
+- End-to-end processing pipeline deployed and tested
+- All bugs fixed and validated
+
+**Resources Deployed:**
+- Processor Lambda: Docker container with spaCy 3.8.8 and en_core_web_sm model
+- SQS Event Source: Processor Lambda triggered by EssayProcessingQueue
+- CloudWatch Log Group: ProcessorLambda/LogGroup
+- ECR Repository: CDK-managed container assets repository
+
+**Key Achievements:**
+- Switched from Lambda layer to Docker container due to size limits (spaCy + model > 250MB)
+- Implemented comprehensive lexical metrics (word count, unique words, type-token ratio, POS distribution)
+- Candidate word selection logic for LLM evaluation (up to 20 words per essay)
+- Bedrock integration with Claude 3 Sonnet for word-level feedback
+- DynamoDB status updates (awaiting_processing → processing → processed)
+- Docker context issue resolved, deployment successful
+- Fixed DynamoDB compatibility issues (float to Decimal conversion, reserved keywords)
+- Processor Lambda ARN: `arn:aws:lambda:us-east-1:971422717446:function:VocabRecommendationStack-ProcessorLambda71A929CE-ozi1g6dgvdXT`
+
+**Technical Decisions:**
+- Used Docker container image instead of Lambda layer (size constraints)
+- Base image: `public.ecr.aws/lambda/python:3.12`
+- Memory: 3008 MB (for spaCy model loading)
+- Timeout: 5 minutes (matches SQS visibility timeout)
+- Batch size: 1 (process one essay at a time)
+- Float to Decimal conversion for DynamoDB compatibility
+- ExpressionAttributeNames for reserved keywords ("metrics", "feedback")
+
+**Bugs Fixed:**
+1. **DynamoDB Float Type Error**: DynamoDB doesn't support Python float types. Fixed by converting all float values to Decimal using recursive conversion function.
+2. **Reserved Keyword Error**: "metrics" and "feedback" are reserved keywords in DynamoDB. Fixed by using ExpressionAttributeNames in UpdateExpression.
+
+**Testing:**
+- Docker image build successful
+- CDK deployment successful
+- End-to-end integration test created (`test_processing.py`)
+- **All tests passing** ✅
+- Processing time: ~37 seconds for typical essay (85 words, 20 candidate words)
+- Validated: metrics calculation, Bedrock feedback generation, DynamoDB storage
 
 ---
 
@@ -90,10 +128,7 @@
 
 ## Next Steps
 
-1. Begin Epic 3: Processing Pipeline implementation
-2. Build spaCy Lambda layer
-3. Create processor Lambda with spaCy integration
-4. Implement Bedrock integration for word-level feedback
-5. Configure SQS event source for processor Lambda
-6. Test end-to-end processing flow
+1. ✅ **Epic 3 Complete**: All processing pipeline tests passing
+2. Begin Epic 4: Frontend implementation (React + Tailwind + shadcn/ui)
+3. Consider Epic 5: Observability enhancements (CloudWatch alarms, metrics)
 

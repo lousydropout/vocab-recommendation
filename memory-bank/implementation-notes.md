@@ -11,46 +11,51 @@ vocab_recommendation/
 ├── test/
 │   └── vocab_recommendation.test.ts    # CDK unit tests ✅
 ├── lambda/
-│   ├── api/                             # TODO: Epic 2
+│   ├── api/                             # ✅ Epic 2
 │   │   ├── lambda_function.py
 │   │   ├── app.py
 │   │   └── requirements.txt
-│   └── processor/                       # TODO: Epic 3
+│   ├── s3_upload_trigger/               # ✅ Epic 2
+│   │   ├── lambda_function.py
+│   │   └── requirements.txt
+│   └── processor/                       # ✅ Epic 3
 │       ├── lambda_function.py
 │       ├── processor.py
-│       └── requirements.txt
-├── layers/
-│   └── spacy/                           # TODO: Epic 3
 │       ├── requirements.txt
-│       └── build_layer.sh
+│       └── Dockerfile                   # Docker container for spaCy
+├── test/
+│   ├── vocab_recommendation.test.ts     # ✅ CDK unit tests
+│   ├── test_api.py                      # ✅ API integration tests
+│   └── test_processing.py              # ✅ End-to-end processing tests
 ├── memory-bank/                         # Project documentation
 └── package.json                         # CDK dependencies (TypeScript)
 ```
 
 ## Key Implementation Details
 
-### Lambda Layer for spaCy
+### Docker Container for spaCy (Processor Lambda)
 
-1. Build the layer:
-   ```bash
-   cd layers/spacy
-   ./build_layer.sh
+**Decision**: Switched from Lambda layer to Docker container due to size limits (spaCy + model > 250MB unzipped limit).
+
+1. Dockerfile structure:
+   ```dockerfile
+   FROM public.ecr.aws/lambda/python:3.12
+   RUN pip install --no-cache-dir spacy && \
+       python -m spacy download en_core_web_sm
+   COPY lambda_function.py requirements.txt /var/task/
+   RUN pip install --no-cache-dir -r requirements.txt -t /var/task
+   CMD ["lambda_function.handler"]
    ```
-   
-2. Layer structure:
-   ```
-   python/
-     lib/
-       python3.12/
-         site-packages/
-           spacy/
-           en_core_web_sm/
-   ```
+
+2. CDK deployment:
+   - CDK automatically builds and pushes Docker image to ECR
+   - Uses `lambda.DockerImageCode.fromImageAsset()`
+   - Image is built during `cdk deploy`
 
 3. In Lambda code:
    ```python
    import spacy
-   nlp = spacy.load("en_core_web_sm")
+   nlp = spacy.load("en_core_web_sm")  # Model pre-installed in container
    ```
 
 ### Bedrock Integration
@@ -73,6 +78,8 @@ vocab_recommendation/
 - Use `update_item` with `UpdateExpression` for atomic updates
 - Track status transitions: `awaiting_processing` → `processing` → `processed`
 - Store timestamps in ISO8601 format
+- **Important**: Convert float values to Decimal before storing (DynamoDB doesn't support Python floats)
+- **Important**: Use ExpressionAttributeNames for reserved keywords ("metrics", "feedback", "status", etc.)
 
 ### Error Handling
 
@@ -98,28 +105,44 @@ vocab_recommendation/
 6. ✅ Verify S3 → SQS → Lambda flow
 7. ✅ Configure Python dependency bundling in CDK
 
-### Epic 3: Processing (TODO)
-1. ⏳ Create processor Lambda
-2. ⏳ Test Bedrock integration
-3. ⏳ Monitor CloudWatch logs
+### Epic 3: Processing ✅
+1. ✅ Create processor Lambda (Docker container with spaCy)
+2. ✅ Test Bedrock integration (Claude 3 Sonnet)
+3. ✅ Monitor CloudWatch logs
+4. ✅ Fix DynamoDB compatibility issues (float/Decimal, reserved keywords)
+5. ✅ End-to-end testing complete (`test_processing.py`)
 
 ## Common Issues
 
 ### spaCy Model Not Found
 - **Issue**: `OSError: Can't find model 'en_core_web_sm'`
 - **Solution**: Ensure layer is built correctly and attached to Lambda
+- **Status**: ✅ Resolved - Using Docker container with model pre-installed
 
 ### Bedrock Access Denied
 - **Issue**: `AccessDeniedException` when invoking model
 - **Solution**: Check IAM role has `bedrock:InvokeModel` permission
+- **Status**: ✅ Resolved - IAM permissions configured correctly
 
 ### SQS Message Format
 - **Issue**: Processor Lambda can't parse SQS message
 - **Solution**: S3 event notification wraps message in `Records` array
+- **Status**: ✅ Resolved - Message parsing implemented correctly
 
 ### Lambda Timeout
 - **Issue**: Processing takes > 5 minutes
 - **Solution**: Increase timeout, optimize Bedrock calls (batch if possible)
+- **Status**: ✅ Resolved - Processing completes in ~37 seconds for typical essay
+
+### DynamoDB Float Type Error
+- **Issue**: `TypeError: Float types are not supported. Use Decimal types instead.`
+- **Solution**: Convert all float values to Decimal before storing in DynamoDB
+- **Status**: ✅ Fixed - Added `convert_floats_to_decimal()` function
+
+### DynamoDB Reserved Keyword Error
+- **Issue**: `ValidationException: Attribute name is a reserved keyword; reserved keyword: metrics`
+- **Solution**: Use ExpressionAttributeNames for reserved keywords in UpdateExpression
+- **Status**: ✅ Fixed - Updated `update_dynamodb()` to use ExpressionAttributeNames for "metrics" and "feedback"
 
 ## Performance Considerations
 
@@ -127,6 +150,10 @@ vocab_recommendation/
 - **Bedrock Latency**: ~1-2s per word evaluation
 - **Cost**: Limit candidate words to ~20 per essay
 - **Memory**: Processor Lambda needs 3008MB for spaCy
+- **Processing Time**: ~37 seconds for typical essay (85 words, 20 candidate words)
+  - spaCy analysis: ~1-2 seconds
+  - Bedrock evaluations: ~1-2 seconds per word (20 words = ~20-40 seconds)
+  - DynamoDB updates: < 1 second
 
 ## Testing Strategy
 
@@ -149,11 +176,17 @@ vocab_recommendation/
    - Error handling (404, empty requests)
    - All tests passing
 
-### Lambda Function Tests (TODO)
-1. ⏳ **Unit Tests**: Test processor logic with mock Bedrock responses
-2. ⏳ **Integration Tests**: Test full flow with test S3 bucket
-3. ⏳ **Load Tests**: Verify < 60s end-to-end latency
-4. ⏳ **Error Tests**: Test DLQ, timeout, and error scenarios
+### Lambda Function Tests ✅
+1. ✅ **End-to-End Integration Test**: Created `test_processing.py`
+   - Tests complete flow: upload → S3 → SQS → Processor → DynamoDB
+   - Validates metrics calculation (word count, unique words, type-token ratio, POS distribution)
+   - Validates Bedrock feedback generation (20 words evaluated)
+   - Validates DynamoDB storage and retrieval
+   - All tests passing ✅
+   - Processing time: ~37 seconds for typical essay
+2. ⏳ **Unit Tests**: Test processor logic with mock Bedrock responses (future enhancement)
+3. ⏳ **Load Tests**: Verify < 60s end-to-end latency (validated in integration test)
+4. ⏳ **Error Tests**: Test DLQ, timeout, and error scenarios (future enhancement)
 
 ## Epic 1 Implementation Details
 
