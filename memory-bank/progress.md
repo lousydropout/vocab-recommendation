@@ -12,10 +12,10 @@
 - Stack successfully deployed to `us-east-1`
 
 **Resources Deployed:**
-- S3 Bucket: `vocab-essays-971422717446-us-east-1`
-- DynamoDB Table: `EssayMetrics`
-- SQS Queue: `essay-processing-queue` (with DLQ)
-- IAM Roles: 3 Lambda roles with appropriate permissions
+- S3 Bucket: `vincent-vocab-essays-971422717446-us-east-1`
+- DynamoDB Table: `VincentVocabEssayMetrics`
+- SQS Queue: `vincent-vocab-essay-processing-queue` (with DLQ: `vincent-vocab-essay-processing-dlq`)
+- IAM Roles: 3 Lambda roles with appropriate permissions (all prefixed with `vincent-vocab-`)
 - CloudFormation Outputs: All resource names/ARNs exported
 
 **Key Achievements:**
@@ -43,9 +43,9 @@
 - Comprehensive test suite created and passing
 
 **Resources Deployed:**
-- API Lambda: FastAPI application with Mangum adapter
-- S3 Upload Trigger Lambda: Processes S3 events and sends to SQS
-- API Gateway: REST API with 3 endpoints
+- API Lambda: `vincent-vocab-api-lambda` (FastAPI application with Mangum adapter)
+- S3 Upload Trigger Lambda: `vincent-vocab-s3-upload-lambda` (Processes S3 events and sends to SQS)
+- API Gateway: `vincent-vocab-essay-analyzer-api` (REST API with 3 endpoints)
 - S3 Event Notifications: Configured to trigger Lambda
 
 **Key Achievements:**
@@ -54,7 +54,7 @@
 - S3 → Lambda → SQS flow working
 - Python dependency bundling configured in CDK
 - All 6 API integration tests passing
-- API URL: `https://3uyr4x1nta.execute-api.us-east-1.amazonaws.com/prod/`
+- API URL: `https://m18eg6bei9.execute-api.us-east-1.amazonaws.com/prod/`
 
 **Testing:**
 - Created `test_api.py` with 6 comprehensive tests
@@ -76,8 +76,8 @@
 - All bugs fixed and validated
 
 **Resources Deployed:**
-- Processor Lambda: Docker container with spaCy 3.8.8 and en_core_web_sm model
-- SQS Event Source: Processor Lambda triggered by EssayProcessingQueue
+- Processor Lambda: `vincent-vocab-processor-lambda` (Docker container with spaCy 3.8.8 and en_core_web_sm model)
+- SQS Event Source: Processor Lambda triggered by `vincent-vocab-essay-processing-queue`
 - CloudWatch Log Group: ProcessorLambda/LogGroup
 - ECR Repository: CDK-managed container assets repository
 
@@ -89,7 +89,7 @@
 - DynamoDB status updates (awaiting_processing → processing → processed)
 - Docker context issue resolved, deployment successful
 - Fixed DynamoDB compatibility issues (float to Decimal conversion, reserved keywords)
-- Processor Lambda ARN: `arn:aws:lambda:us-east-1:971422717446:function:VocabRecommendationStack-ProcessorLambda71A929CE-ozi1g6dgvdXT`
+- Processor Lambda ARN: `arn:aws:lambda:us-east-1:971422717446:function:vincent-vocab-processor-lambda`
 
 **Technical Decisions:**
 - Used Docker container image instead of Lambda layer (size constraints)
@@ -208,23 +208,68 @@
 **Deployment:**
 - ✅ **Deployed:** 2025-11-11
 - **Deployment time:** 50.89s
-- **SNS Topic ARN:** `arn:aws:sns:us-east-1:971422717446:VocabRecommendationStack-AlarmTopicD01E77F9-XKGCpt6xlQZj`
+- **SNS Topic ARN:** `arn:aws:sns:us-east-1:971422717446:VincentVocabRecommendationStack-AlarmTopicD01E77F9-bAnT6sVEjN2v`
 - **All Lambda functions updated** with structured logging
 - **All 6 CloudWatch alarms created** and active
 - **Alarm names:**
-  - `vocab-analyzer-api-lambda-errors`
-  - `vocab-analyzer-s3-upload-lambda-errors`
-  - `vocab-analyzer-processor-lambda-errors`
-  - `vocab-analyzer-dlq-messages`
-  - `vocab-analyzer-processor-lambda-throttles`
-  - `vocab-analyzer-processor-lambda-duration`
+  - `vincent-vocab-api-lambda-errors`
+  - `vincent-vocab-s3-upload-lambda-errors`
+  - `vincent-vocab-processor-lambda-errors`
+  - `vincent-vocab-dlq-messages`
+  - `vincent-vocab-processor-lambda-throttles`
+  - `vincent-vocab-processor-lambda-duration`
+
+---
+
+---
+
+### 🔄 Stack Renaming (2025-01-XX)
+
+**Completed:** 2025-01-XX
+
+**Summary:**
+- Renamed stack from `VocabRecommendationStack` to `VincentVocabRecommendationStack`
+- Added `vincent-vocab-` prefix to all resources for better organization
+- Updated all CDK unit tests to match new resource names
+- Successfully deployed renamed stack
+
+**Resource Naming Changes:**
+- **Stack Name:** `VocabRecommendationStack` → `VincentVocabRecommendationStack`
+- **S3 Bucket:** `vocab-essays-{account}-{region}` → `vincent-vocab-essays-{account}-{region}`
+- **DynamoDB Table:** `EssayMetrics` → `VincentVocabEssayMetrics`
+- **SQS Queues:**
+  - `essay-processing-queue` → `vincent-vocab-essay-processing-queue`
+  - `essay-processing-dlq` → `vincent-vocab-essay-processing-dlq`
+- **Lambda Functions:**
+  - API Lambda: `vincent-vocab-api-lambda`
+  - S3 Upload Lambda: `vincent-vocab-s3-upload-lambda`
+  - Processor Lambda: `vincent-vocab-processor-lambda`
+- **IAM Roles:**
+  - `vincent-vocab-api-lambda-role`
+  - `vincent-vocab-s3-upload-lambda-role`
+  - `vincent-vocab-processor-lambda-role`
+- **API Gateway:** `Vocabulary Essay Analyzer API` → `vincent-vocab-essay-analyzer-api`
+- **CloudWatch Alarms:** All 6 alarms prefixed with `vincent-vocab-`
+- **SNS Topic:** Display name → `vincent-vocab-essay-analyzer-alarms`
+
+**Deployment:**
+- ✅ **Deployed:** 2025-01-XX
+- **Deployment time:** 87.34s
+- **Stack ARN:** `arn:aws:cloudformation:us-east-1:971422717446:stack/VincentVocabRecommendationStack/a8484330-bf12-11f0-b401-12b2ccca489f`
+- **API URL:** `https://m18eg6bei9.execute-api.us-east-1.amazonaws.com/prod/`
+- **All 34 CDK unit tests updated and passing** ✅
+
+**Testing:**
+- Updated all test assertions to match new resource names
+- All 34 tests passing after renaming
 
 ---
 
 ## Next Steps
 
-1. ✅ **Epic 5 Complete & Deployed**: Observability fully implemented and live
+1. ✅ **Stack Renamed & Redeployed**: All resources now prefixed with `vincent-vocab-`
 2. Deploy frontend to production (S3 + CloudFront, or Vercel/Netlify)
 3. Configure SNS topic subscriptions (email, Slack, etc.) for alarm notifications
 4. Monitor CloudWatch Logs to verify structured logging is working
+5. Consider deleting old `VocabRecommendationStack` if no longer needed
 

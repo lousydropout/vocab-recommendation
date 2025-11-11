@@ -11,7 +11,7 @@ import time
 from typing import Dict, Any
 
 # API Base URL - update this if needed
-API_BASE_URL = "https://3uyr4x1nta.execute-api.us-east-1.amazonaws.com/prod"
+API_BASE_URL = "https://m18eg6bei9.execute-api.us-east-1.amazonaws.com/prod"
 
 def print_section(title: str):
     """Print a formatted section header"""

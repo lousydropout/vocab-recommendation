@@ -18,7 +18,7 @@ describe('VocabRecommendationStack', () => {
   describe('S3 Bucket', () => {
     test('should create EssaysBucket with correct properties', () => {
       template.hasResourceProperties('AWS::S3::Bucket', {
-        BucketName: 'vocab-essays-123456789012-us-east-1',
+        BucketName: 'vincent-vocab-essays-123456789012-us-east-1',
         PublicAccessBlockConfiguration: {
           BlockPublicAcls: true,
           BlockPublicPolicy: true,
@@ -63,7 +63,7 @@ describe('VocabRecommendationStack', () => {
   describe('DynamoDB Table', () => {
     test('should create EssayMetrics table with correct schema', () => {
       template.hasResourceProperties('AWS::DynamoDB::Table', {
-        TableName: 'EssayMetrics',
+        TableName: 'VincentVocabEssayMetrics',
         KeySchema: [
           {
             AttributeName: 'essay_id',
@@ -95,7 +95,7 @@ describe('VocabRecommendationStack', () => {
   describe('SQS Queues', () => {
     test('should create ProcessingDLQ with correct properties', () => {
       template.hasResourceProperties('AWS::SQS::Queue', {
-        QueueName: 'essay-processing-dlq',
+        QueueName: 'vincent-vocab-essay-processing-dlq',
         MessageRetentionPeriod: 1209600, // 14 days in seconds
         SqsManagedSseEnabled: true,
       });
@@ -103,7 +103,7 @@ describe('VocabRecommendationStack', () => {
 
     test('should create EssayProcessingQueue with correct properties', () => {
       template.hasResourceProperties('AWS::SQS::Queue', {
-        QueueName: 'essay-processing-queue',
+        QueueName: 'vincent-vocab-essay-processing-queue',
         VisibilityTimeout: 300, // 5 minutes
         MessageRetentionPeriod: 1209600, // 14 days
         RedrivePolicy: {
@@ -303,48 +303,48 @@ describe('VocabRecommendationStack', () => {
   describe('CloudWatch Observability', () => {
     test('should create SNS topic for alarms', () => {
       template.hasResourceProperties('AWS::SNS::Topic', {
-        DisplayName: 'Vocabulary Essay Analyzer Alarms',
+        DisplayName: 'vincent-vocab-essay-analyzer-alarms',
       });
     });
 
     test('should create alarm for API Lambda errors', () => {
       template.hasResourceProperties('AWS::CloudWatch::Alarm', {
-        AlarmName: 'vocab-analyzer-api-lambda-errors',
+        AlarmName: 'vincent-vocab-api-lambda-errors',
         AlarmDescription: 'Alerts when API Lambda errors exceed threshold',
       });
     });
 
     test('should create alarm for S3 Upload Lambda errors', () => {
       template.hasResourceProperties('AWS::CloudWatch::Alarm', {
-        AlarmName: 'vocab-analyzer-s3-upload-lambda-errors',
+        AlarmName: 'vincent-vocab-s3-upload-lambda-errors',
         AlarmDescription: 'Alerts when S3 Upload Lambda errors exceed threshold',
       });
     });
 
     test('should create alarm for Processor Lambda errors', () => {
       template.hasResourceProperties('AWS::CloudWatch::Alarm', {
-        AlarmName: 'vocab-analyzer-processor-lambda-errors',
+        AlarmName: 'vincent-vocab-processor-lambda-errors',
         AlarmDescription: 'Alerts when Processor Lambda errors exceed threshold',
       });
     });
 
     test('should create alarm for DLQ messages', () => {
       template.hasResourceProperties('AWS::CloudWatch::Alarm', {
-        AlarmName: 'vocab-analyzer-dlq-messages',
+        AlarmName: 'vincent-vocab-dlq-messages',
         AlarmDescription: 'Alerts when messages are sent to DLQ (processing failures)',
       });
     });
 
     test('should create alarm for Processor Lambda throttles', () => {
       template.hasResourceProperties('AWS::CloudWatch::Alarm', {
-        AlarmName: 'vocab-analyzer-processor-lambda-throttles',
+        AlarmName: 'vincent-vocab-processor-lambda-throttles',
         AlarmDescription: 'Alerts when Processor Lambda is throttled',
       });
     });
 
     test('should create alarm for Processor Lambda duration', () => {
       template.hasResourceProperties('AWS::CloudWatch::Alarm', {
-        AlarmName: 'vocab-analyzer-processor-lambda-duration',
+        AlarmName: 'vincent-vocab-processor-lambda-duration',
         AlarmDescription: 'Alerts when Processor Lambda duration is high (approaching timeout)',
       });
     });

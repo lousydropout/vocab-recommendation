@@ -11,7 +11,7 @@ import time
 from typing import Dict, Any, Optional
 
 # API Base URL
-API_BASE_URL = "https://3uyr4x1nta.execute-api.us-east-1.amazonaws.com/prod"
+API_BASE_URL = "https://m18eg6bei9.execute-api.us-east-1.amazonaws.com/prod"
 
 # Maximum wait time for processing (in seconds)
 MAX_WAIT_TIME = 300  # 5 minutes (matches Lambda timeout)

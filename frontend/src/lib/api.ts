@@ -1,4 +1,4 @@
-const API_BASE_URL = import.meta.env.VITE_API_URL || "https://3uyr4x1nta.execute-api.us-east-1.amazonaws.com/prod";
+const API_BASE_URL = import.meta.env.VITE_API_URL || "https://m18eg6bei9.execute-api.us-east-1.amazonaws.com/prod";
 
 export interface EssayResponse {
   essay_id: string;

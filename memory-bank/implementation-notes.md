@@ -274,7 +274,7 @@ All resource names and ARNs are exported as CloudFormation outputs for easy refe
   - Environment variable: PROCESSING_QUEUE_URL
 
 ### API Gateway Configuration
-- **Base URL**: `https://3uyr4x1nta.execute-api.us-east-1.amazonaws.com/prod/`
+- **Base URL**: `https://m18eg6bei9.execute-api.us-east-1.amazonaws.com/prod/`
 - **Endpoints**:
   - `POST /essay` - Create essay (direct upload or presigned URL)
   - `GET /essay/{essay_id}` - Retrieve essay results

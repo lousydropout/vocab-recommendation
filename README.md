@@ -134,7 +134,7 @@ See [`memory-bank/api-spec.md`](memory-bank/api-spec.md) for detailed API docume
   - API Lambda and S3 trigger Lambda deployed
   - API Gateway configured with 3 endpoints
   - 6/6 API integration tests passing
-  - API URL: `https://3uyr4x1nta.execute-api.us-east-1.amazonaws.com/prod/`
+  - API URL: `https://m18eg6bei9.execute-api.us-east-1.amazonaws.com/prod/`
 - [x] Epic 3: Processing Pipeline (spaCy + Bedrock) ✅ **COMPLETE**
   - Processor Lambda deployed as Docker container
   - spaCy NLP analysis and Bedrock LLM integration working

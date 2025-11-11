@@ -8,7 +8,7 @@ const app = new cdk.App();
 const account = process.env.CDK_DEFAULT_ACCOUNT || process.env.AWS_ACCOUNT_ID;
 const region = process.env.CDK_DEFAULT_REGION || process.env.AWS_REGION || 'us-east-1';
 
-new VocabRecommendationStack(app, 'VocabRecommendationStack', {
+new VocabRecommendationStack(app, 'VincentVocabRecommendationStack', {
   env: account && region
     ? { account, region }
     : undefined, // Will use default from AWS CLI config if not specified

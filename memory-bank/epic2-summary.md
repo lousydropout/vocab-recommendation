@@ -30,7 +30,7 @@ Epic 2 successfully implemented the API layer for the Vocabulary Essay Analyzer,
 
 ### 3. API Gateway
 - **Type**: REST API
-- **Base URL**: `https://3uyr4x1nta.execute-api.us-east-1.amazonaws.com/prod/`
+- **Base URL**: `https://m18eg6bei9.execute-api.us-east-1.amazonaws.com/prod/`
 - **CORS**: Enabled for all origins
 - **Integration**: Lambda proxy integration
 

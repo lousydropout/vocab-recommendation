@@ -47,7 +47,7 @@ npm run build
 Create a `.env` file in the frontend directory:
 
 ```env
-VITE_API_URL=https://3uyr4x1nta.execute-api.us-east-1.amazonaws.com/prod
+VITE_API_URL=https://m18eg6bei9.execute-api.us-east-1.amazonaws.com/prod
 ```
 
 If not set, it defaults to the production API URL.

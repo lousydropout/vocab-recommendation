@@ -19,7 +19,7 @@ export class VocabRecommendationStack extends cdk.Stack {
 
     // S3 Bucket for essay uploads
     const essaysBucket = new s3.Bucket(this, 'EssaysBucket', {
-      bucketName: `vocab-essays-${this.account}-${this.region}`,
+      bucketName: `vincent-vocab-essays-${this.account}-${this.region}`,
       removalPolicy: cdk.RemovalPolicy.DESTROY, // For PoC - allows bucket deletion
       autoDeleteObjects: true, // Automatically delete objects when stack is deleted
       versioned: false,
@@ -37,14 +37,14 @@ export class VocabRecommendationStack extends cdk.Stack {
 
     // SQS Dead Letter Queue
     const dlq = new sqs.Queue(this, 'ProcessingDLQ', {
-      queueName: 'essay-processing-dlq',
+      queueName: 'vincent-vocab-essay-processing-dlq',
       retentionPeriod: cdk.Duration.days(14),
       encryption: sqs.QueueEncryption.SQS_MANAGED,
     });
 
     // SQS Queue for essay processing
     const processingQueue = new sqs.Queue(this, 'EssayProcessingQueue', {
-      queueName: 'essay-processing-queue',
+      queueName: 'vincent-vocab-essay-processing-queue',
       visibilityTimeout: cdk.Duration.minutes(5), // Must be >= Lambda timeout
       retentionPeriod: cdk.Duration.days(14),
       encryption: sqs.QueueEncryption.SQS_MANAGED,
@@ -56,7 +56,7 @@ export class VocabRecommendationStack extends cdk.Stack {
 
     // DynamoDB Table for essay metrics
     const metricsTable = new dynamodb.Table(this, 'EssayMetrics', {
-      tableName: 'EssayMetrics',
+      tableName: 'VincentVocabEssayMetrics',
       partitionKey: { name: 'essay_id', type: dynamodb.AttributeType.STRING },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST, // On-demand pricing for PoC
       removalPolicy: cdk.RemovalPolicy.DESTROY, // For PoC - allows table deletion
@@ -68,6 +68,7 @@ export class VocabRecommendationStack extends cdk.Stack {
 
     // IAM Role for API Lambda (will be used in Epic 2)
     const apiLambdaRole = new iam.Role(this, 'ApiLambdaRole', {
+      roleName: 'vincent-vocab-api-lambda-role',
       assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
       description: 'IAM role for API Lambda function',
       managedPolicies: [
@@ -83,6 +84,7 @@ export class VocabRecommendationStack extends cdk.Stack {
     // IAM Role for S3 Upload Lambda (will be used in Epic 2)
     // This Lambda will be triggered by S3 events and push to SQS
     const s3UploadLambdaRole = new iam.Role(this, 'S3UploadLambdaRole', {
+      roleName: 'vincent-vocab-s3-upload-lambda-role',
       assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
       description: 'IAM role for S3 upload trigger Lambda function',
       managedPolicies: [
@@ -96,6 +98,7 @@ export class VocabRecommendationStack extends cdk.Stack {
 
     // IAM Role for Processor Lambda (will be used in Epic 3)
     const processorLambdaRole = new iam.Role(this, 'ProcessorLambdaRole', {
+      roleName: 'vincent-vocab-processor-lambda-role',
       assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
       description: 'IAM role for essay processor Lambda function',
       managedPolicies: [
@@ -136,6 +139,7 @@ export class VocabRecommendationStack extends cdk.Stack {
         });
     
     const apiLambda = new lambda.Function(this, 'ApiLambda', {
+      functionName: 'vincent-vocab-api-lambda',
       runtime: lambda.Runtime.PYTHON_3_12,
       handler: 'lambda_function.handler',
       code: apiLambdaCode,
@@ -163,6 +167,7 @@ export class VocabRecommendationStack extends cdk.Stack {
         });
     
     const s3UploadLambda = new lambda.Function(this, 'S3UploadLambda', {
+      functionName: 'vincent-vocab-s3-upload-lambda',
       runtime: lambda.Runtime.PYTHON_3_12,
       handler: 'lambda_function.handler',
       code: s3UploadLambdaCode,
@@ -182,7 +187,7 @@ export class VocabRecommendationStack extends cdk.Stack {
 
     // API Gateway
     const api = new apigateway.RestApi(this, 'VocabApi', {
-      restApiName: 'Vocabulary Essay Analyzer API',
+      restApiName: 'vincent-vocab-essay-analyzer-api',
       description: 'API for vocabulary essay analysis',
       defaultCorsPreflightOptions: {
         allowOrigins: apigateway.Cors.ALL_ORIGINS,
@@ -209,6 +214,7 @@ export class VocabRecommendationStack extends cdk.Stack {
     // Processor Lambda Function (Container Image)
     // Using container image instead of layer due to size limits (spaCy + model > 250MB)
     const processorLambda = new lambda.DockerImageFunction(this, 'ProcessorLambda', {
+      functionName: 'vincent-vocab-processor-lambda',
       code: lambda.DockerImageCode.fromImageAsset(
         path.join(__dirname, '../lambda/processor'),
         {
@@ -240,12 +246,12 @@ export class VocabRecommendationStack extends cdk.Stack {
 
     // SNS Topic for alarm notifications (optional - can be configured later)
     const alarmTopic = new sns.Topic(this, 'AlarmTopic', {
-      displayName: 'Vocabulary Essay Analyzer Alarms',
+      displayName: 'vincent-vocab-essay-analyzer-alarms',
     });
 
     // CloudWatch Alarm: API Lambda Errors
     const apiLambdaErrorAlarm = new cloudwatch.Alarm(this, 'ApiLambdaErrorAlarm', {
-      alarmName: 'vocab-analyzer-api-lambda-errors',
+      alarmName: 'vincent-vocab-api-lambda-errors',
       alarmDescription: 'Alerts when API Lambda errors exceed threshold',
       metric: apiLambda.metricErrors({
         statistic: 'Sum',
@@ -259,7 +265,7 @@ export class VocabRecommendationStack extends cdk.Stack {
 
     // CloudWatch Alarm: S3 Upload Lambda Errors
     const s3UploadLambdaErrorAlarm = new cloudwatch.Alarm(this, 'S3UploadLambdaErrorAlarm', {
-      alarmName: 'vocab-analyzer-s3-upload-lambda-errors',
+      alarmName: 'vincent-vocab-s3-upload-lambda-errors',
       alarmDescription: 'Alerts when S3 Upload Lambda errors exceed threshold',
       metric: s3UploadLambda.metricErrors({
         statistic: 'Sum',
@@ -273,7 +279,7 @@ export class VocabRecommendationStack extends cdk.Stack {
 
     // CloudWatch Alarm: Processor Lambda Errors
     const processorLambdaErrorAlarm = new cloudwatch.Alarm(this, 'ProcessorLambdaErrorAlarm', {
-      alarmName: 'vocab-analyzer-processor-lambda-errors',
+      alarmName: 'vincent-vocab-processor-lambda-errors',
       alarmDescription: 'Alerts when Processor Lambda errors exceed threshold',
       metric: processorLambda.metricErrors({
         statistic: 'Sum',
@@ -287,7 +293,7 @@ export class VocabRecommendationStack extends cdk.Stack {
 
     // CloudWatch Alarm: Dead Letter Queue Messages (Failed Processing)
     const dlqAlarm = new cloudwatch.Alarm(this, 'DLQAlarm', {
-      alarmName: 'vocab-analyzer-dlq-messages',
+      alarmName: 'vincent-vocab-dlq-messages',
       alarmDescription: 'Alerts when messages are sent to DLQ (processing failures)',
       metric: dlq.metricApproximateNumberOfMessagesVisible({
         statistic: 'Sum',
@@ -301,7 +307,7 @@ export class VocabRecommendationStack extends cdk.Stack {
 
     // CloudWatch Alarm: Processor Lambda Throttles (Optional)
     const processorLambdaThrottleAlarm = new cloudwatch.Alarm(this, 'ProcessorLambdaThrottleAlarm', {
-      alarmName: 'vocab-analyzer-processor-lambda-throttles',
+      alarmName: 'vincent-vocab-processor-lambda-throttles',
       alarmDescription: 'Alerts when Processor Lambda is throttled',
       metric: processorLambda.metricThrottles({
         statistic: 'Sum',
@@ -315,7 +321,7 @@ export class VocabRecommendationStack extends cdk.Stack {
 
     // CloudWatch Alarm: Processor Lambda Duration (High Duration Warning)
     const processorLambdaDurationAlarm = new cloudwatch.Alarm(this, 'ProcessorLambdaDurationAlarm', {
-      alarmName: 'vocab-analyzer-processor-lambda-duration',
+      alarmName: 'vincent-vocab-processor-lambda-duration',
       alarmDescription: 'Alerts when Processor Lambda duration is high (approaching timeout)',
       metric: processorLambda.metricDuration({
         statistic: 'Average',

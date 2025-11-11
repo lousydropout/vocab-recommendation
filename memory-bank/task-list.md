@@ -12,24 +12,27 @@
 
 2. ✅ **Create S3 bucket** for essay uploads
    - Created `EssaysBucket` with auto-delete, encryption, CORS
+   - Bucket name: `vincent-vocab-essays-{account}-{region}`
    - Event notifications will be configured in Epic 2 when Lambda is created
 
 3. ✅ **Create SQS queue** `EssayProcessingQueue`
    - Created with DLQ (3 retry attempts)
+   - Queue names: `vincent-vocab-essay-processing-queue` and `vincent-vocab-essay-processing-dlq`
    - 5-minute visibility timeout
    - 14-day message retention
    - SQS-managed encryption
 
 4. ✅ **Create DynamoDB table** `EssayMetrics`
+   - Table name: `VincentVocabEssayMetrics`
    - Partition key: `essay_id` (String)
    - On-demand billing mode
    - AWS-managed encryption
    - Point-in-time recovery disabled (for PoC)
 
 5. ✅ **Create IAM roles/policies**
-   - **ApiLambdaRole**: S3 read/write, DynamoDB read/write, SQS send
-   - **S3UploadLambdaRole**: S3 read, SQS send
-   - **ProcessorLambdaRole**: S3 read, DynamoDB read/write, SQS consume, Bedrock invoke (Claude 3 models)
+   - **ApiLambdaRole**: `vincent-vocab-api-lambda-role` - S3 read/write, DynamoDB read/write, SQS send
+   - **S3UploadLambdaRole**: `vincent-vocab-s3-upload-lambda-role` - S3 read, SQS send
+   - **ProcessorLambdaRole**: `vincent-vocab-processor-lambda-role` - S3 read, DynamoDB read/write, SQS consume, Bedrock invoke (Claude 3 models)
    - All roles have CloudWatch Logs permissions
 
 6. ✅ **Deploy CDK stack** and test resource creation.
@@ -345,9 +348,55 @@
 
 ---
 
+---
+
+## 🔄 **Stack Renaming** ✅ **COMPLETE**
+
+**Completed:** 2025-01-XX
+
+**Goal:** Rename stack and all resources with `vincent-vocab-` prefix for better organization.
+
+### Tasks
+
+1. ✅ **Rename CDK stack**
+   - Changed stack name from `VocabRecommendationStack` to `VincentVocabRecommendationStack`
+   - Updated `bin/vocab_recommendation.ts`
+
+2. ✅ **Update all resource names with prefix**
+   - S3 Bucket: `vocab-essays-{account}-{region}` → `vincent-vocab-essays-{account}-{region}`
+   - DynamoDB Table: `EssayMetrics` → `VincentVocabEssayMetrics`
+   - SQS Queues: Added `vincent-vocab-` prefix to both queues
+   - Lambda Functions: Added `functionName` property with `vincent-vocab-` prefix
+   - IAM Roles: Added `roleName` property with `vincent-vocab-` prefix
+   - API Gateway: Updated `restApiName` with prefix
+   - CloudWatch Alarms: Updated all 6 alarm names with prefix
+   - SNS Topic: Updated display name with prefix
+
+3. ✅ **Update CDK unit tests**
+   - Updated all test assertions to match new resource names
+   - Updated S3 bucket name, DynamoDB table name, SQS queue names
+   - Updated all CloudWatch alarm names
+   - Updated SNS topic display name
+   - All 34 tests passing after updates
+
+4. ✅ **Deploy renamed stack**
+   - Successfully deployed `VincentVocabRecommendationStack`
+   - Deployment time: 87.34s
+   - All 54 resources created successfully
+   - Stack ARN: `arn:aws:cloudformation:us-east-1:971422717446:stack/VincentVocabRecommendationStack/a8484330-bf12-11f0-b401-12b2ccca489f`
+   - New API URL: `https://m18eg6bei9.execute-api.us-east-1.amazonaws.com/prod/`
+
+**Key Changes:**
+- Stack name: `VocabRecommendationStack` → `VincentVocabRecommendationStack`
+- All resources now prefixed with `vincent-vocab-` for consistency
+- Old stack remains in AWS (can be deleted if no longer needed)
+
+---
+
 ## Notes
 
 - **Input Format**: Plain text input only for now
 - **Processing Flow**: S3 upload → Lambda → SQS → Processor Lambda
 - **Status Tracking**: `awaiting_processing` → `processing` → `processed`
+- **Stack Name**: `VincentVocabRecommendationStack` (all resources prefixed with `vincent-vocab-`)
 
