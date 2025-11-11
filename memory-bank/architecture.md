@@ -6,6 +6,8 @@ The Vocabulary Essay Analyzer PoC is a serverless AWS application that processes
 
 ## Architecture Flow
 
+### Phase 1: PoC Flow (Epics 1-5) - COMPLETE
+
 ```
 1. Client → POST /essay → API Lambda
    - Creates DynamoDB record (status: awaiting_processing)
@@ -26,7 +28,29 @@ The Vocabulary Essay Analyzer PoC is a serverless AWS application that processes
    - Returns status, metrics, and feedback
 ```
 
+### Phase 2: Multi-Essay Teaching Platform Flow (Epics 6-8) - IN PROGRESS
+
+```
+Teacher (Frontend)
+   ↓
+Login (Cognito)
+   ↓ JWT
+API Gateway (Cognito Authorizer)
+   ↓
+API Lambda
+   ↳ DynamoDB (Teachers, Students, Assignments, EssayMetrics)
+   ↳ S3 Uploads (Batch Essay)
+   ↳ SQS Queue (Processor)
+Processor Lambda
+   ↳ Updates EssayMetrics + Aggregation Lambdas
+Aggregation Lambdas
+   ↳ ClassMetrics / StudentMetrics tables
+Frontend Dashboards (React)
+```
+
 ## AWS Components
+
+### Phase 1: PoC Components (Epics 1-5) - COMPLETE
 
 | Component | Service | Purpose |
 |-----------|---------|---------|
@@ -35,8 +59,21 @@ The Vocabulary Essay Analyzer PoC is a serverless AWS application that processes
 | Queue | SQS | Async processing trigger |
 | Processing | Lambda (Python) | spaCy + Bedrock analysis |
 | Database | DynamoDB | Store essay status and results |
-| NLP Model | Lambda Layer | spaCy + en_core_web_sm |
+| NLP Model | Docker Container | spaCy + en_core_web_sm |
 | LLM | Bedrock (Claude 3) | Word-level evaluation |
+
+### Phase 2: Multi-Essay Teaching Platform Components (Epics 6-8) - IN PROGRESS
+
+| Component | Service | Purpose |
+|-----------|---------|---------|
+| Authentication | Cognito User Pool | Teacher login and JWT tokens |
+| Authorization | API Gateway Authorizer | JWT validation for all routes |
+| Teacher Management | DynamoDB (Teachers table) | Teacher profiles and metadata |
+| Student Management | DynamoDB (Students table) | Student profiles linked to teachers |
+| Assignment Management | DynamoDB (Assignments table) | Assignment metadata and organization |
+| Analytics | DynamoDB (ClassMetrics, StudentMetrics) | Pre-computed aggregate metrics |
+| Aggregation | Lambda (Python) | Compute class and student-level metrics |
+| Override Queue | SQS (EssayUpdateQueue) | Decouple metric re-computation from API |
 
 ## Technology Stack
 

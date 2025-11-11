@@ -393,10 +393,159 @@
 
 ---
 
+---
+
+## 🔐 **Epic 6 — Authentication & Teacher Management** 🔄 **IN PROGRESS**
+
+**Goal:** Add secure teacher login and protect APIs with JWT.
+
+### Backend Tasks
+
+1. ⏳ **Add AWS Cognito User Pool `VocabTeachersPool`**
+   - Enable email + password sign-up, no MFA
+   - Create App Client for frontend login
+
+2. ⏳ **Update API Gateway with Cognito Authorizer**
+   - Configure authorizer on all API routes
+   - Validate JWT tokens
+
+3. ⏳ **Add `Teachers` table for metadata**
+   - Partition key: `teacher_id` (from Cognito sub)
+   - Store email, name, timestamps
+
+4. ⏳ **Modify existing Lambdas to require decoded JWT → inject `teacher_id`**
+   - Update API Lambda to extract teacher_id from JWT
+   - Pass teacher_id to all DynamoDB operations
+   - Update S3 upload trigger Lambda to include teacher_id in SQS messages
+
+5. ⏳ **Add `/auth/health` endpoint for token validation**
+
+### Frontend Tasks
+
+1. ⏳ **Add login page (email + password) → store token in localStorage**
+
+2. ⏳ **Add logout button → clear token**
+
+3. ⏳ **Update API client to attach `Authorization: Bearer <token>`**
+
+### Deliverables
+
+- Authenticated POST /essay endpoint
+- Secure dashboard access
+- Verified token propagation in logs
+
+### Tests
+
+- Unit tests: JWT validation, teacher record creation
+- Integration: unauthorized → 403; authorized → 200
+
+---
+
+## 📚 **Epic 7 — Student & Assignment Management + Batch Uploads** 🔄 **IN PROGRESS**
+
+**Goal:** Teachers can manage students and upload multiple essays per assignment.
+
+### Backend Tasks
+
+1. ⏳ **Add `Students` table and `/students` CRUD endpoints**
+   - Partition key: `teacher_id`, Sort key: `student_id`
+
+2. ⏳ **Add `Assignments` table and `/assignments` CRUD endpoints**
+   - Partition key: `teacher_id`, Sort key: `assignment_id`
+
+3. ⏳ **Extend API Lambda:**
+   - `POST /assignments/{id}/upload`
+   - Generate S3 presigned URL for batch upload
+
+4. ⏳ **Extend S3 trigger Lambda:**
+   - Detect assignment metadata
+   - Extract student names using spaCy NER (`PERSON`) or regex
+   - Fuzzy-match to existing students (Levenshtein distance < 0.2)
+   - Create student record if missing
+   - Send one SQS message per essay with assignment_id + student_id
+
+5. ⏳ **Update DynamoDB schema for EssayMetrics**
+   - Change partition key to `teacher_id#assignment_id`
+   - Change sort key to `student_id#essay_id`
+   - Include teacher_id, assignment_id, student_id in all records
+
+6. ⏳ **Add aggregation Lambda to compute assignment-level averages**
+   - Store in ClassMetrics table
+   - Triggered by essay updates or scheduled
+
+### Frontend Tasks
+
+1. ⏳ **"Add Student" form + table view**
+
+2. ⏳ **"Create Assignment" modal + batch upload button (using presigned URLs)**
+
+3. ⏳ **Assignment page showing class summary (average type-token ratio etc.)**
+
+### Deliverables
+
+- Batch upload flow complete (E2E essay processing)
+- ClassMetrics records created automatically
+
+### Tests
+
+- Integration: upload .zip → multiple EssayMetrics created
+- Unit: name extraction accuracy ≥ 90% on sample essays
+
+---
+
+## 📈 **Epic 8 — Analytics & Teacher Review Interface** 🔄 **IN PROGRESS**
+
+**Goal:** Provide teachers with class- and student-level dashboards and the ability to override AI assessments.
+
+### Backend Tasks
+
+1. ⏳ **Add `StudentMetrics` table to store rolling averages per student**
+   - Partition key: `teacher_id`, Sort key: `student_id`
+
+2. ⏳ **Create aggregation Lambda (triggered by essay updates or daily schedule)**
+   - Compute student-level metrics over time
+   - Store in StudentMetrics table
+
+3. ⏳ **Add `/metrics/class/{assignment_id}` and `/metrics/student/{student_id}` endpoints**
+   - Return pre-computed metrics from ClassMetrics and StudentMetrics tables
+
+4. ⏳ **Add `/essays/{id}/override` endpoint:**
+   - Accept patch of word-level feedback
+   - Update EssayMetrics.feedback and re-compute aggregates
+   - Log overrides to CloudWatch for audit
+
+5. ⏳ **Add new `EssayUpdateQueue` to decouple metric re-computation from API latency**
+   - Queue messages when feedback is overridden
+   - Aggregation Lambda processes updates asynchronously
+
+### Frontend Tasks
+
+1. ⏳ **Class Dashboard: charts for avg TTR, word difficulty, correctness distribution**
+
+2. ⏳ **Student Dashboard: time-series of metrics + essay list**
+
+3. ⏳ **Essay Review Page:**
+   - Show AI feedback by word (color-coded)
+   - Allow teacher to toggle correct/incorrect
+   - Submit changes to `/override` API
+
+### Deliverables
+
+- Realtime class + student dashboards
+- Editable feedback view with audit logging
+
+### Tests
+
+- API integration: override updates propagate to aggregates
+- UI E2E: teacher changes feedback → refresh → persisted state visible
+
+---
+
 ## Notes
 
 - **Input Format**: Plain text input only for now
 - **Processing Flow**: S3 upload → Lambda → SQS → Processor Lambda
 - **Status Tracking**: `awaiting_processing` → `processing` → `processed`
 - **Stack Name**: `VincentVocabRecommendationStack` (all resources prefixed with `vincent-vocab-`)
+- **Phase 2**: Multi-essay teaching platform with authentication, student management, and analytics (Epics 6-8)
 

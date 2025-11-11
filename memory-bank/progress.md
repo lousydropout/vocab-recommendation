@@ -265,11 +265,63 @@
 
 ---
 
+---
+
+### 🔄 Epic 6 — Authentication & Teacher Management - IN PROGRESS
+
+**Status:** Not Started
+
+**Goal:** Add secure teacher login and protect APIs with JWT.
+
+**Key Tasks:**
+- Add AWS Cognito User Pool `VocabTeachersPool`
+- Update API Gateway with Cognito Authorizer
+- Add `Teachers` table for metadata
+- Modify existing Lambdas to require decoded JWT → inject `teacher_id`
+- Add `/auth/health` endpoint for token validation
+- Frontend: Add login page and token management
+
+---
+
+### 🔄 Epic 7 — Student & Assignment Management + Batch Uploads - IN PROGRESS
+
+**Status:** Not Started
+
+**Goal:** Teachers can manage students and upload multiple essays per assignment.
+
+**Key Tasks:**
+- Add `Students` and `Assignments` tables
+- Add CRUD endpoints for students and assignments
+- Extend S3 trigger Lambda to extract student names (spaCy NER)
+- Update DynamoDB schema for EssayMetrics (teacher_id, assignment_id, student_id)
+- Add aggregation Lambda for ClassMetrics
+- Frontend: Student management UI, assignment creation, batch upload
+
+---
+
+### 🔄 Epic 8 — Analytics & Teacher Review Interface - IN PROGRESS
+
+**Status:** Not Started
+
+**Goal:** Provide teachers with class- and student-level dashboards and the ability to override AI assessments.
+
+**Key Tasks:**
+- Add `StudentMetrics` table
+- Create aggregation Lambda for student-level metrics
+- Add `/metrics/class/{assignment_id}` and `/metrics/student/{student_id}` endpoints
+- Add `/essays/{id}/override` endpoint for feedback overrides
+- Add `EssayUpdateQueue` for metric re-computation
+- Frontend: Class dashboard, student dashboard, essay review page with override toggles
+
+---
+
 ## Next Steps
 
 1. ✅ **Stack Renamed & Redeployed**: All resources now prefixed with `vincent-vocab-`
-2. Deploy frontend to production (S3 + CloudFront, or Vercel/Netlify)
-3. Configure SNS topic subscriptions (email, Slack, etc.) for alarm notifications
-4. Monitor CloudWatch Logs to verify structured logging is working
-5. Consider deleting old `VocabRecommendationStack` if no longer needed
+2. **Epic 6:** Implement Cognito authentication and teacher management
+3. **Epic 7:** Implement student/assignment management and batch uploads
+4. **Epic 8:** Implement analytics dashboards and teacher override functionality
+5. Deploy frontend to production (S3 + CloudFront, or Vercel/Netlify)
+6. Configure SNS topic subscriptions (email, Slack, etc.) for alarm notifications
+7. Monitor CloudWatch Logs to verify structured logging is working
 
