@@ -222,20 +222,75 @@
 
 ---
 
-## 📊 **Epic 5: Observability**
+## 📊 **Epic 5: Observability** ✅ **COMPLETE**
 
 **Goal:** Basic monitoring and logging.
 
 ### Tasks
 
-1. Enable **CloudWatch Logs** for all Lambdas.
+1. ✅ **Enable CloudWatch Logs for all Lambdas**
+   - CloudWatch Logs automatically enabled via `AWSLambdaBasicExecutionRole` managed policy
+   - All Lambda functions have logging permissions
 
-2. Add simple `print()` logs for:
-   * Upload received
-   * Processing start/completion
-   * Errors from Bedrock or spaCy
+2. ✅ **Add structured logging with Python logging module**
+   - **API Lambda** (`lambda/api/app.py`):
+     * Logs essay upload received with essay_id, text length, presigned URL request
+     * Logs DynamoDB record creation
+     * Logs S3 upload completion
+     * Logs presigned URL generation
+     * Logs essay retrieval requests and results
+     * Error logging with full stack traces
+   - **S3 Upload Trigger Lambda** (`lambda/s3_upload_trigger/lambda_function.py`):
+     * Logs S3 event received with record count
+     * Logs message sent to SQS with essay_id, file_key, bucket
+     * Logs skipped files (non-essay files)
+     * Logs processing summary (processed, skipped, errors)
+     * Error logging with context
+   - **Processor Lambda** (`lambda/processor/lambda_function.py`):
+     * Logs processing start with essay_id, file_key, message_id
+     * Logs status updates (processing → processed)
+     * Logs S3 download completion with text length
+     * Logs spaCy analysis completion with metrics (word_count, unique_words, type_token_ratio)
+     * Logs candidate word selection count
+     * Logs Bedrock evaluation errors (if any)
+     * Logs processing completion with metrics and feedback counts
+     * Error logging with essay_id, error type, and full stack traces
 
-3. (Optional) Set CloudWatch alarm for failed Lambdas > threshold.
+3. ✅ **Set CloudWatch alarms for monitoring**
+   - **SNS Topic**: Created `AlarmTopic` for alarm notifications
+   - **API Lambda Error Alarm**: Threshold 5 errors in 5 minutes
+   - **S3 Upload Lambda Error Alarm**: Threshold 5 errors in 5 minutes
+   - **Processor Lambda Error Alarm**: Threshold 3 errors in 5 minutes (more critical)
+   - **DLQ Alarm**: Alerts when any message is in DLQ (processing failures)
+   - **Processor Lambda Throttle Alarm**: Alerts on any throttles
+   - **Processor Lambda Duration Alarm**: Alerts when average duration exceeds 4 minutes (80% of timeout)
+
+**Testing:**
+- ✅ CDK unit tests updated with 8 new observability tests
+- ✅ All 34 tests passing (26 existing + 8 new)
+- ✅ Alarms validated in CloudFormation template
+- ✅ SNS topic and alarm actions verified
+
+**Deployment:**
+- ✅ **Deployed:** 2025-11-11
+- **Deployment time:** 50.89s
+- **SNS Topic ARN:** `arn:aws:sns:us-east-1:971422717446:VocabRecommendationStack-AlarmTopicD01E77F9-XKGCpt6xlQZj`
+- **All Lambda functions updated** with structured logging code deployed
+- **All 6 CloudWatch alarms created** and monitoring
+- **Alarm names:**
+  - `vocab-analyzer-api-lambda-errors`
+  - `vocab-analyzer-s3-upload-lambda-errors`
+  - `vocab-analyzer-processor-lambda-errors`
+  - `vocab-analyzer-dlq-messages`
+  - `vocab-analyzer-processor-lambda-throttles`
+  - `vocab-analyzer-processor-lambda-duration`
+
+**Deployment Notes:**
+- All alarms configured with SNS notifications
+- Alarm thresholds tuned for PoC (can be adjusted for production)
+- Structured logging provides context for debugging
+- CloudWatch Logs automatically available for all Lambda functions
+- All observability features are live and operational
 
 ---
 

@@ -290,6 +290,71 @@ describe('VocabRecommendationStack', () => {
         },
       });
     });
+
+    test('should export AlarmTopicArn', () => {
+      template.hasOutput('AlarmTopicArn', {
+        Export: {
+          Name: 'AlarmTopicArn',
+        },
+      });
+    });
+  });
+
+  describe('CloudWatch Observability', () => {
+    test('should create SNS topic for alarms', () => {
+      template.hasResourceProperties('AWS::SNS::Topic', {
+        DisplayName: 'Vocabulary Essay Analyzer Alarms',
+      });
+    });
+
+    test('should create alarm for API Lambda errors', () => {
+      template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+        AlarmName: 'vocab-analyzer-api-lambda-errors',
+        AlarmDescription: 'Alerts when API Lambda errors exceed threshold',
+      });
+    });
+
+    test('should create alarm for S3 Upload Lambda errors', () => {
+      template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+        AlarmName: 'vocab-analyzer-s3-upload-lambda-errors',
+        AlarmDescription: 'Alerts when S3 Upload Lambda errors exceed threshold',
+      });
+    });
+
+    test('should create alarm for Processor Lambda errors', () => {
+      template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+        AlarmName: 'vocab-analyzer-processor-lambda-errors',
+        AlarmDescription: 'Alerts when Processor Lambda errors exceed threshold',
+      });
+    });
+
+    test('should create alarm for DLQ messages', () => {
+      template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+        AlarmName: 'vocab-analyzer-dlq-messages',
+        AlarmDescription: 'Alerts when messages are sent to DLQ (processing failures)',
+      });
+    });
+
+    test('should create alarm for Processor Lambda throttles', () => {
+      template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+        AlarmName: 'vocab-analyzer-processor-lambda-throttles',
+        AlarmDescription: 'Alerts when Processor Lambda is throttled',
+      });
+    });
+
+    test('should create alarm for Processor Lambda duration', () => {
+      template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+        AlarmName: 'vocab-analyzer-processor-lambda-duration',
+        AlarmDescription: 'Alerts when Processor Lambda duration is high (approaching timeout)',
+      });
+    });
+
+    test('should have at least 6 CloudWatch alarms', () => {
+      // API Lambda errors, S3 Upload Lambda errors, Processor Lambda errors,
+      // DLQ messages, Processor Lambda throttles, Processor Lambda duration
+      const alarms = template.findResources('AWS::CloudWatch::Alarm');
+      expect(Object.keys(alarms).length).toBeGreaterThanOrEqual(6);
+    });
   });
 
   describe('Resource Counts', () => {

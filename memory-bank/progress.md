@@ -167,15 +167,64 @@
 
 ---
 
-### ⏳ Epic 5: Observability - PENDING
+### ✅ Epic 5: Observability - COMPLETE
 
-**Status:** Not started
+**Completed:** 2025-11-11
+
+**Summary:**
+- Enhanced all Lambda functions with structured logging using Python's logging module
+- Added comprehensive CloudWatch alarms for error monitoring
+- Configured SNS topic for alarm notifications
+- All observability features tested and validated
+
+**Resources Deployed:**
+- SNS Topic: `AlarmTopic` for alarm notifications
+- CloudWatch Alarms: 6 alarms total
+  - API Lambda Errors (threshold: 5 errors in 5 minutes)
+  - S3 Upload Lambda Errors (threshold: 5 errors in 5 minutes)
+  - Processor Lambda Errors (threshold: 3 errors in 5 minutes)
+  - DLQ Messages (threshold: 1 message)
+  - Processor Lambda Throttles (threshold: 1 throttle)
+  - Processor Lambda Duration (threshold: 4 minutes average)
+
+**Key Achievements:**
+- Structured logging with context (essay_id, request_id, error details)
+- CloudWatch Logs automatically enabled via AWSLambdaBasicExecutionRole
+- Comprehensive error tracking across all Lambda functions
+- DLQ monitoring for failed processing
+- Performance monitoring (duration, throttles)
+- All alarms configured with SNS notifications
+
+**Logging Enhancements:**
+- **API Lambda**: Logs upload received, DynamoDB operations, S3 uploads, presigned URL generation, essay retrieval
+- **S3 Upload Trigger Lambda**: Logs S3 event processing, SQS message sending, error handling
+- **Processor Lambda**: Logs processing start/completion, spaCy analysis, Bedrock evaluations, DynamoDB updates, error details
+
+**Testing:**
+- CDK unit tests updated with 8 new tests for observability
+- All 34 tests passing (including 8 new observability tests) ✅
+- Alarms validated in CloudFormation template
+
+**Deployment:**
+- ✅ **Deployed:** 2025-11-11
+- **Deployment time:** 50.89s
+- **SNS Topic ARN:** `arn:aws:sns:us-east-1:971422717446:VocabRecommendationStack-AlarmTopicD01E77F9-XKGCpt6xlQZj`
+- **All Lambda functions updated** with structured logging
+- **All 6 CloudWatch alarms created** and active
+- **Alarm names:**
+  - `vocab-analyzer-api-lambda-errors`
+  - `vocab-analyzer-s3-upload-lambda-errors`
+  - `vocab-analyzer-processor-lambda-errors`
+  - `vocab-analyzer-dlq-messages`
+  - `vocab-analyzer-processor-lambda-throttles`
+  - `vocab-analyzer-processor-lambda-duration`
 
 ---
 
 ## Next Steps
 
-1. ✅ **Epic 4 Complete**: Frontend fully implemented with shadcn/ui
-2. Consider Epic 5: Observability enhancements (CloudWatch alarms, metrics)
-3. Deploy frontend to production (S3 + CloudFront, or Vercel/Netlify)
+1. ✅ **Epic 5 Complete & Deployed**: Observability fully implemented and live
+2. Deploy frontend to production (S3 + CloudFront, or Vercel/Netlify)
+3. Configure SNS topic subscriptions (email, Slack, etc.) for alarm notifications
+4. Monitor CloudWatch Logs to verify structured logging is working
 

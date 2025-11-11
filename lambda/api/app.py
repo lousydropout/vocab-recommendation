@@ -1,11 +1,16 @@
 import os
 import uuid
 import boto3
+import logging
 from datetime import datetime
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional
+
+# Configure structured logging
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
 
 app = FastAPI(title="Vocabulary Essay Analyzer API")
 
@@ -47,19 +52,35 @@ async def create_essay(request: EssayUploadRequest):
     essay_id = str(uuid.uuid4())
     file_key = f"essays/{essay_id}.txt"
     
+    # Log upload received
+    logger.info("Essay upload received", extra={
+        "essay_id": essay_id,
+        "has_text": bool(request.essay_text),
+        "request_presigned_url": request.request_presigned_url,
+        "text_length": len(request.essay_text) if request.essay_text else 0,
+    })
+    
     table = dynamodb.Table(METRICS_TABLE)
     now = datetime.utcnow().isoformat()
     
     # Create DynamoDB record
-    table.put_item(
-        Item={
-            'essay_id': essay_id,
-            'status': 'awaiting_processing',
-            'file_key': file_key,
-            'created_at': now,
-            'updated_at': now,
-        }
-    )
+    try:
+        table.put_item(
+            Item={
+                'essay_id': essay_id,
+                'status': 'awaiting_processing',
+                'file_key': file_key,
+                'created_at': now,
+                'updated_at': now,
+            }
+        )
+        logger.info("DynamoDB record created", extra={"essay_id": essay_id})
+    except Exception as e:
+        logger.error("Failed to create DynamoDB record", extra={
+            "essay_id": essay_id,
+            "error": str(e),
+        }, exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to create essay record: {str(e)}")
     
     # If essay_text provided, upload directly to S3
     if request.essay_text:
@@ -70,7 +91,13 @@ async def create_essay(request: EssayUploadRequest):
                 Body=request.essay_text.encode('utf-8'),
                 ContentType='text/plain',
             )
+            logger.info("Essay uploaded to S3", extra={"essay_id": essay_id, "file_key": file_key})
         except Exception as e:
+            logger.error("Failed to upload essay to S3", extra={
+                "essay_id": essay_id,
+                "file_key": file_key,
+                "error": str(e),
+            }, exc_info=True)
             raise HTTPException(status_code=500, detail=f"Failed to upload essay: {str(e)}")
     
     # If presigned URL requested, generate it
@@ -87,6 +114,9 @@ async def create_essay(request: EssayUploadRequest):
             ExpiresIn=3600
         )
         expires_in = 3600
+        logger.info("Presigned URL generated", extra={"essay_id": essay_id, "expires_in": expires_in})
+    
+    logger.info("Essay upload completed", extra={"essay_id": essay_id, "status": "awaiting_processing"})
     
     return EssayResponse(
         essay_id=essay_id,
@@ -99,17 +129,28 @@ async def create_essay(request: EssayUploadRequest):
 @app.get("/essay/{essay_id}")
 async def get_essay(essay_id: str):
     """Retrieve essay analysis results"""
+    logger.info("Essay retrieval requested", extra={"essay_id": essay_id})
+    
     table = dynamodb.Table(METRICS_TABLE)
     
     try:
         response = table.get_item(Key={'essay_id': essay_id})
         if 'Item' not in response:
+            logger.warning("Essay not found", extra={"essay_id": essay_id})
             raise HTTPException(status_code=404, detail="Essay not found")
         
         item = response['Item']
+        status = item.get('status', 'unknown')
+        logger.info("Essay retrieved", extra={
+            "essay_id": essay_id,
+            "status": status,
+            "has_metrics": bool(item.get('metrics')),
+            "feedback_count": len(item.get('feedback', [])),
+        })
+        
         return {
             'essay_id': item['essay_id'],
-            'status': item.get('status', 'unknown'),
+            'status': status,
             'file_key': item.get('file_key'),
             'metrics': item.get('metrics'),
             'feedback': item.get('feedback', []),
@@ -119,6 +160,10 @@ async def get_essay(essay_id: str):
     except HTTPException:
         raise
     except Exception as e:
+        logger.error("Failed to retrieve essay", extra={
+            "essay_id": essay_id,
+            "error": str(e),
+        }, exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to retrieve essay: {str(e)}")
 
 

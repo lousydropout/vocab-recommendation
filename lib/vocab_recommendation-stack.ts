@@ -8,6 +8,9 @@ import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as s3n from 'aws-cdk-lib/aws-s3-notifications';
 import * as lambdaEventSources from 'aws-cdk-lib/aws-lambda-event-sources';
+import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
+import * as cloudwatchActions from 'aws-cdk-lib/aws-cloudwatch-actions';
+import * as sns from 'aws-cdk-lib/aws-sns';
 import * as path from 'path';
 
 export class VocabRecommendationStack extends cdk.Stack {
@@ -231,6 +234,99 @@ export class VocabRecommendationStack extends cdk.Stack {
       })
     );
 
+    // ============================================
+    // CloudWatch Observability (Epic 5)
+    // ============================================
+
+    // SNS Topic for alarm notifications (optional - can be configured later)
+    const alarmTopic = new sns.Topic(this, 'AlarmTopic', {
+      displayName: 'Vocabulary Essay Analyzer Alarms',
+    });
+
+    // CloudWatch Alarm: API Lambda Errors
+    const apiLambdaErrorAlarm = new cloudwatch.Alarm(this, 'ApiLambdaErrorAlarm', {
+      alarmName: 'vocab-analyzer-api-lambda-errors',
+      alarmDescription: 'Alerts when API Lambda errors exceed threshold',
+      metric: apiLambda.metricErrors({
+        statistic: 'Sum',
+        period: cdk.Duration.minutes(5),
+      }),
+      threshold: 5, // Alert if 5+ errors in 5 minutes
+      evaluationPeriods: 1,
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+    });
+    apiLambdaErrorAlarm.addAlarmAction(new cloudwatchActions.SnsAction(alarmTopic));
+
+    // CloudWatch Alarm: S3 Upload Lambda Errors
+    const s3UploadLambdaErrorAlarm = new cloudwatch.Alarm(this, 'S3UploadLambdaErrorAlarm', {
+      alarmName: 'vocab-analyzer-s3-upload-lambda-errors',
+      alarmDescription: 'Alerts when S3 Upload Lambda errors exceed threshold',
+      metric: s3UploadLambda.metricErrors({
+        statistic: 'Sum',
+        period: cdk.Duration.minutes(5),
+      }),
+      threshold: 5, // Alert if 5+ errors in 5 minutes
+      evaluationPeriods: 1,
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+    });
+    s3UploadLambdaErrorAlarm.addAlarmAction(new cloudwatchActions.SnsAction(alarmTopic));
+
+    // CloudWatch Alarm: Processor Lambda Errors
+    const processorLambdaErrorAlarm = new cloudwatch.Alarm(this, 'ProcessorLambdaErrorAlarm', {
+      alarmName: 'vocab-analyzer-processor-lambda-errors',
+      alarmDescription: 'Alerts when Processor Lambda errors exceed threshold',
+      metric: processorLambda.metricErrors({
+        statistic: 'Sum',
+        period: cdk.Duration.minutes(5),
+      }),
+      threshold: 3, // Alert if 3+ errors in 5 minutes (more critical)
+      evaluationPeriods: 1,
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+    });
+    processorLambdaErrorAlarm.addAlarmAction(new cloudwatchActions.SnsAction(alarmTopic));
+
+    // CloudWatch Alarm: Dead Letter Queue Messages (Failed Processing)
+    const dlqAlarm = new cloudwatch.Alarm(this, 'DLQAlarm', {
+      alarmName: 'vocab-analyzer-dlq-messages',
+      alarmDescription: 'Alerts when messages are sent to DLQ (processing failures)',
+      metric: dlq.metricApproximateNumberOfMessagesVisible({
+        statistic: 'Sum',
+        period: cdk.Duration.minutes(5),
+      }),
+      threshold: 1, // Alert if any message in DLQ
+      evaluationPeriods: 1,
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+    });
+    dlqAlarm.addAlarmAction(new cloudwatchActions.SnsAction(alarmTopic));
+
+    // CloudWatch Alarm: Processor Lambda Throttles (Optional)
+    const processorLambdaThrottleAlarm = new cloudwatch.Alarm(this, 'ProcessorLambdaThrottleAlarm', {
+      alarmName: 'vocab-analyzer-processor-lambda-throttles',
+      alarmDescription: 'Alerts when Processor Lambda is throttled',
+      metric: processorLambda.metricThrottles({
+        statistic: 'Sum',
+        period: cdk.Duration.minutes(5),
+      }),
+      threshold: 1, // Alert if any throttles
+      evaluationPeriods: 1,
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+    });
+    processorLambdaThrottleAlarm.addAlarmAction(new cloudwatchActions.SnsAction(alarmTopic));
+
+    // CloudWatch Alarm: Processor Lambda Duration (High Duration Warning)
+    const processorLambdaDurationAlarm = new cloudwatch.Alarm(this, 'ProcessorLambdaDurationAlarm', {
+      alarmName: 'vocab-analyzer-processor-lambda-duration',
+      alarmDescription: 'Alerts when Processor Lambda duration is high (approaching timeout)',
+      metric: processorLambda.metricDuration({
+        statistic: 'Average',
+        period: cdk.Duration.minutes(5),
+      }),
+      threshold: 240000, // 4 minutes (80% of 5-minute timeout)
+      evaluationPeriods: 2, // Must exceed threshold for 2 periods
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+    });
+    processorLambdaDurationAlarm.addAlarmAction(new cloudwatchActions.SnsAction(alarmTopic));
+
     // CloudFormation Outputs
     new cdk.CfnOutput(this, 'EssaysBucketName', {
       value: essaysBucket.bucketName,
@@ -278,6 +374,12 @@ export class VocabRecommendationStack extends cdk.Stack {
       value: processorLambda.functionArn,
       description: 'Processor Lambda function ARN',
       exportName: 'ProcessorLambdaArn',
+    });
+
+    new cdk.CfnOutput(this, 'AlarmTopicArn', {
+      value: alarmTopic.topicArn,
+      description: 'SNS topic ARN for CloudWatch alarm notifications',
+      exportName: 'AlarmTopicArn',
     });
   }
 }

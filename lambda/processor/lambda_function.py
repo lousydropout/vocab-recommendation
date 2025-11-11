@@ -1,11 +1,16 @@
 import json
 import os
 import boto3
+import logging
 from datetime import datetime
 from decimal import Decimal
 from typing import Dict, List, Any, Optional
 import spacy
 import re
+
+# Configure structured logging
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
 
 # Initialize AWS clients
 s3_client = boto3.client('s3')
@@ -207,9 +212,11 @@ Respond in JSON format:
         }
         
     except Exception as e:
-        print(f"Error calling Bedrock for word '{word}': {str(e)}")
-        import traceback
-        traceback.print_exc()
+        logger.error("Error calling Bedrock", extra={
+            "word": word,
+            "error": str(e),
+            "error_type": type(e).__name__,
+        }, exc_info=True)
         return {
             'word': word,
             'correct': True,
@@ -274,37 +281,58 @@ def handler(event, context):
     Process SQS messages containing essay processing requests.
     Each message contains: {essay_id, file_key}
     """
-    print(f"Received event: {json.dumps(event)}")
+    logger.info("Processor Lambda invoked", extra={
+        "record_count": len(event.get('Records', [])),
+        "request_id": context.aws_request_id if context else None,
+    })
     
     for record in event['Records']:
+        essay_id = None
         try:
             # Parse SQS message
             message_body = json.loads(record['body'])
             essay_id = message_body['essay_id']
             file_key = message_body['file_key']
             
-            print(f"Processing essay_id: {essay_id}, file_key: {file_key}")
+            logger.info("Processing started", extra={
+                "essay_id": essay_id,
+                "file_key": file_key,
+                "message_id": record.get('messageId'),
+            })
             
             # Update status to 'processing'
             update_dynamodb(essay_id, 'processing', None, None)
+            logger.info("Status updated to processing", extra={"essay_id": essay_id})
             
             # Download essay from S3
             essay_text = download_essay_from_s3(ESSAYS_BUCKET, file_key)
-            print(f"Downloaded essay, length: {len(essay_text)} characters")
+            logger.info("Essay downloaded from S3", extra={
+                "essay_id": essay_id,
+                "text_length": len(essay_text),
+            })
             
             # Run spaCy analysis
             analysis_result = run_spacy_analysis(essay_text)
             metrics = {k: v for k, v in analysis_result.items() if k != 'doc'}
             doc = analysis_result['doc']
             
-            print(f"spaCy analysis complete. Word count: {metrics['word_count']}")
+            logger.info("spaCy analysis complete", extra={
+                "essay_id": essay_id,
+                "word_count": metrics['word_count'],
+                "unique_words": metrics['unique_words'],
+                "type_token_ratio": float(metrics['type_token_ratio']),
+            })
             
             # Select candidate words
             candidates = select_candidate_words(doc, max_candidates=20)
-            print(f"Selected {len(candidates)} candidate words for evaluation")
+            logger.info("Candidate words selected", extra={
+                "essay_id": essay_id,
+                "candidate_count": len(candidates),
+            })
             
             # Evaluate each candidate with Bedrock
             feedback = []
+            bedrock_errors = 0
             for candidate in candidates:
                 word = candidate['word']
                 sentence = candidate['sentence']
@@ -316,18 +344,41 @@ def handler(event, context):
                 
                 evaluation = evaluate_word_with_bedrock(word, sentence, essay_context)
                 feedback.append(evaluation)
-                print(f"Evaluated word: {word}, correct: {evaluation['correct']}")
+                
+                if 'error' in evaluation.get('comment', '').lower():
+                    bedrock_errors += 1
+                
+                logger.debug("Word evaluated", extra={
+                    "essay_id": essay_id,
+                    "word": word,
+                    "correct": evaluation['correct'],
+                })
+            
+            if bedrock_errors > 0:
+                logger.warning("Some Bedrock evaluations had errors", extra={
+                    "essay_id": essay_id,
+                    "error_count": bedrock_errors,
+                    "total_words": len(candidates),
+                })
             
             # Update DynamoDB with results
             update_dynamodb(essay_id, 'processed', metrics, feedback)
-            print(f"Successfully processed essay_id: {essay_id}")
+            logger.info("Processing completed successfully", extra={
+                "essay_id": essay_id,
+                "metrics_computed": bool(metrics),
+                "feedback_count": len(feedback),
+            })
             
         except Exception as e:
-            print(f"Error processing message: {str(e)}")
-            import traceback
-            traceback.print_exc()
+            logger.error("Error processing message", extra={
+                "essay_id": essay_id or "unknown",
+                "error": str(e),
+                "error_type": type(e).__name__,
+            }, exc_info=True)
             # Re-raise to trigger DLQ after retries
             raise
+    
+    logger.info("Processor Lambda completed", extra={"processed_count": len(event['Records'])})
     
     return {
         'statusCode': 200,
