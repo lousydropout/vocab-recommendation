@@ -62,14 +62,26 @@ test: {
 
 ### Integration Tests (API)
 - **Environment**: Real deployed API
-- **Command**: `python3 test_auth.py` or `python3 test_api.py`
+- **Command**: 
+  - `python3 test_auth.py` - Authentication tests
+  - `python3 test_api.py` - API endpoint tests
+  - `python3 test_processing.py` - Legacy flow end-to-end test
+  - `python3 test_assignment_flow.py` - Assignment flow end-to-end test
+  - `python3 test_epic7.py` - Epic 7 CRUD operations
 - **Use Cases**:
   - Endpoint authentication (401/403/200 flows)
   - API request/response validation
   - Error handling
-  - End-to-end processing flows
+  - End-to-end processing flows (legacy and assignment)
+  - Student name extraction and matching
+  - Zip file processing
 - **Files**: `test_*.py` (root directory)
 - **Status**: ✅ All integration tests passing
+- **Test Coverage**:
+  - ✅ Legacy flow: Complete end-to-end (upload → S3 → SQS → Processor → DynamoDB)
+  - ✅ Assignment flow: Complete end-to-end (assignment → presigned URL → upload → processing)
+  - ✅ Students CRUD: Create, list, get, update, delete
+  - ✅ Assignments CRUD: Create, list, get, presigned URL generation
 
 ## Test File Organization
 
@@ -90,7 +102,9 @@ lambda/
 
 test_auth.py                     # Backend API integration tests
 test_api.py                      # API integration tests
-test_processing.py               # End-to-end processing tests
+test_processing.py               # Legacy flow end-to-end processing tests
+test_assignment_flow.py          # Assignment flow end-to-end tests (NEW)
+test_epic7.py                    # Epic 7 CRUD integration tests (NEW)
 ```
 
 ## Running Tests

@@ -55,6 +55,14 @@ export class VocabRecommendationStack extends cdk.Stack {
       },
     });
 
+    // SQS Queue for essay updates (triggers metric recalculation) - Epic 7
+    const essayUpdateQueue = new sqs.Queue(this, 'EssayUpdateQueue', {
+      queueName: 'vincent-vocab-essay-update-queue',
+      visibilityTimeout: cdk.Duration.minutes(2),
+      retentionPeriod: cdk.Duration.days(14),
+      encryption: sqs.QueueEncryption.SQS_MANAGED,
+    });
+
     // DynamoDB Table for essay metrics
     const metricsTable = new dynamodb.Table(this, 'EssayMetrics', {
       tableName: 'VincentVocabEssayMetrics',
@@ -76,6 +84,36 @@ export class VocabRecommendationStack extends cdk.Stack {
       encryption: dynamodb.TableEncryption.AWS_MANAGED,
     });
 
+    // DynamoDB Table for students (Epic 7)
+    const studentsTable = new dynamodb.Table(this, 'Students', {
+      tableName: 'VincentVocabStudents',
+      partitionKey: { name: 'teacher_id', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'student_id', type: dynamodb.AttributeType.STRING },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      encryption: dynamodb.TableEncryption.AWS_MANAGED,
+    });
+
+    // DynamoDB Table for assignments (Epic 7)
+    const assignmentsTable = new dynamodb.Table(this, 'Assignments', {
+      tableName: 'VincentVocabAssignments',
+      partitionKey: { name: 'teacher_id', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'assignment_id', type: dynamodb.AttributeType.STRING },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      encryption: dynamodb.TableEncryption.AWS_MANAGED,
+    });
+
+    // DynamoDB Table for class metrics (Epic 7)
+    const classMetricsTable = new dynamodb.Table(this, 'ClassMetrics', {
+      tableName: 'VincentVocabClassMetrics',
+      partitionKey: { name: 'teacher_id', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'assignment_id', type: dynamodb.AttributeType.STRING },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      encryption: dynamodb.TableEncryption.AWS_MANAGED,
+    });
+
     // IAM Role for API Lambda (will be used in Epic 2)
     const apiLambdaRole = new iam.Role(this, 'ApiLambdaRole', {
       roleName: 'vincent-vocab-api-lambda-role',
@@ -90,7 +128,11 @@ export class VocabRecommendationStack extends cdk.Stack {
     essaysBucket.grantReadWrite(apiLambdaRole);
     metricsTable.grantReadWriteData(apiLambdaRole);
     teachersTable.grantReadWriteData(apiLambdaRole);
+    studentsTable.grantReadWriteData(apiLambdaRole);
+    assignmentsTable.grantReadWriteData(apiLambdaRole);
+    classMetricsTable.grantReadWriteData(apiLambdaRole);
     processingQueue.grantSendMessages(apiLambdaRole);
+    essayUpdateQueue.grantSendMessages(apiLambdaRole);
 
     // IAM Role for S3 Upload Lambda (will be used in Epic 2)
     // This Lambda will be triggered by S3 events and push to SQS
@@ -120,6 +162,9 @@ export class VocabRecommendationStack extends cdk.Stack {
     // Grant permissions for Processor Lambda
     essaysBucket.grantRead(processorLambdaRole);
     metricsTable.grantReadWriteData(processorLambdaRole);
+    studentsTable.grantReadData(processorLambdaRole);
+    assignmentsTable.grantReadData(processorLambdaRole);
+    classMetricsTable.grantReadWriteData(processorLambdaRole);
     processingQueue.grantConsumeMessages(processorLambdaRole);
 
     // Grant Bedrock permissions for Processor Lambda
@@ -204,8 +249,13 @@ export class VocabRecommendationStack extends cdk.Stack {
         ESSAYS_BUCKET: essaysBucket.bucketName,
         METRICS_TABLE: metricsTable.tableName,
         TEACHERS_TABLE: teachersTable.tableName,
+        STUDENTS_TABLE: studentsTable.tableName,
+        ASSIGNMENTS_TABLE: assignmentsTable.tableName,
+        CLASS_METRICS_TABLE: classMetricsTable.tableName,
         PROCESSING_QUEUE_URL: processingQueue.queueUrl,
+        ESSAY_UPDATE_QUEUE_URL: essayUpdateQueue.queueUrl,
         COGNITO_USER_POOL_ID: userPool.userPoolId,
+        COGNITO_USER_POOL_CLIENT_ID: userPoolClient.userPoolClientId,
         COGNITO_REGION: this.region,
       },
     });
@@ -230,17 +280,25 @@ export class VocabRecommendationStack extends cdk.Stack {
       handler: 'lambda_function.handler',
       code: s3UploadLambdaCode,
       role: s3UploadLambdaRole,
-      timeout: cdk.Duration.seconds(30),
+      timeout: cdk.Duration.minutes(5), // Increased for zip extraction and name parsing
+      memorySize: 512, // Increased for spaCy NER processing
       environment: {
         PROCESSING_QUEUE_URL: processingQueue.queueUrl,
+        STUDENTS_TABLE: studentsTable.tableName,
+        ASSIGNMENTS_TABLE: assignmentsTable.tableName,
+        ESSAYS_BUCKET: essaysBucket.bucketName,
       },
     });
 
+    // Grant additional permissions for S3 Upload Lambda (Epic 7)
+    studentsTable.grantReadWriteData(s3UploadLambdaRole);
+    assignmentsTable.grantReadData(s3UploadLambdaRole);
+
     // S3 Event Notification - trigger Lambda on object creation
+    // Process both essays/ prefix (single essays) and teacher_id/assignments/ prefix (batch uploads)
     essaysBucket.addEventNotification(
       s3.EventType.OBJECT_CREATED,
-      new s3n.LambdaDestination(s3UploadLambda),
-      { prefix: 'essays/' }
+      new s3n.LambdaDestination(s3UploadLambda)
     );
 
     // API Gateway
@@ -287,13 +345,23 @@ export class VocabRecommendationStack extends cdk.Stack {
     const essayIdResource = essayResource.addResource('{essay_id}');
     essayIdResource.addMethod('GET', apiIntegration, authorizerOptions);
 
-    // Students endpoints (protected) - will be added in Epic 7
+    // Students endpoints (protected) - Epic 7
     const studentsResource = api.root.addResource('students');
-    // Will add methods in Epic 7
+    studentsResource.addMethod('POST', apiIntegration, authorizerOptions); // Create student
+    studentsResource.addMethod('GET', apiIntegration, authorizerOptions); // List students
+    const studentIdResource = studentsResource.addResource('{student_id}');
+    studentIdResource.addMethod('GET', apiIntegration, authorizerOptions); // Get student
+    studentIdResource.addMethod('PATCH', apiIntegration, authorizerOptions); // Update student
+    studentIdResource.addMethod('DELETE', apiIntegration, authorizerOptions); // Delete student
 
-    // Assignments endpoints (protected) - will be added in Epic 7
+    // Assignments endpoints (protected) - Epic 7
     const assignmentsResource = api.root.addResource('assignments');
-    // Will add methods in Epic 7
+    assignmentsResource.addMethod('POST', apiIntegration, authorizerOptions); // Create assignment
+    assignmentsResource.addMethod('GET', apiIntegration, authorizerOptions); // List assignments
+    const assignmentIdResource = assignmentsResource.addResource('{assignment_id}');
+    assignmentIdResource.addMethod('GET', apiIntegration, authorizerOptions); // Get assignment
+    const assignmentUploadResource = assignmentIdResource.addResource('upload-url');
+    assignmentUploadResource.addMethod('POST', apiIntegration, authorizerOptions); // Get presigned upload URL
 
     // Metrics endpoints (protected) - will be added in Epic 8
     const metricsResource = api.root.addResource('metrics');
@@ -316,6 +384,7 @@ export class VocabRecommendationStack extends cdk.Stack {
         ESSAYS_BUCKET: essaysBucket.bucketName,
         METRICS_TABLE: metricsTable.tableName,
         BEDROCK_MODEL_ID: 'anthropic.claude-3-sonnet-20240229-v1:0',
+        ESSAY_UPDATE_QUEUE_URL: essayUpdateQueue.queueUrl,
         // AWS_REGION is automatically set by Lambda runtime
       },
     });
@@ -325,6 +394,68 @@ export class VocabRecommendationStack extends cdk.Stack {
       new lambdaEventSources.SqsEventSource(processingQueue, {
         batchSize: 1, // Process one essay at a time
         maxBatchingWindow: cdk.Duration.seconds(0),
+      })
+    );
+
+    // ============================================
+    // Epic 7: Aggregation Lambda
+    // ============================================
+
+    // IAM Role for Aggregation Lambda
+    const aggregationLambdaRole = new iam.Role(this, 'AggregationLambdaRole', {
+      roleName: 'vincent-vocab-aggregation-lambda-role',
+      assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
+      description: 'IAM role for aggregation Lambda function',
+      managedPolicies: [
+        iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaBasicExecutionRole'),
+      ],
+    });
+
+    // Grant permissions for Aggregation Lambda
+    metricsTable.grantReadData(aggregationLambdaRole);
+    classMetricsTable.grantReadWriteData(aggregationLambdaRole);
+    essayUpdateQueue.grantConsumeMessages(aggregationLambdaRole);
+
+    // Aggregation Lambda Function (for ClassMetrics)
+    const aggregationLambdaCode = process.env.CDK_SKIP_BUNDLING === 'true'
+      ? lambda.Code.fromAsset(path.join(__dirname, '../lambda/aggregations'))
+      : lambda.Code.fromAsset(path.join(__dirname, '../lambda/aggregations'), {
+          bundling: {
+            image: lambda.Runtime.PYTHON_3_12.bundlingImage,
+            command: [
+              'bash', '-c',
+              'pip install -r requirements.txt -t /asset-output && cp -au . /asset-output',
+            ],
+          },
+        });
+
+    const aggregationLambda = new lambda.Function(this, 'AggregationLambda', {
+      functionName: 'vincent-vocab-aggregation-lambda',
+      runtime: lambda.Runtime.PYTHON_3_12,
+      handler: 'class_metrics.handler',
+      code: aggregationLambdaCode,
+      role: aggregationLambdaRole,
+      timeout: cdk.Duration.minutes(2),
+      environment: {
+        METRICS_TABLE: metricsTable.tableName,
+        CLASS_METRICS_TABLE: classMetricsTable.tableName,
+      },
+    });
+
+    // SQS Event Source for Aggregation Lambda
+    aggregationLambda.addEventSource(
+      new lambdaEventSources.SqsEventSource(essayUpdateQueue, {
+        batchSize: 10, // Process up to 10 updates at a time
+        maxBatchingWindow: cdk.Duration.seconds(30),
+      })
+    );
+
+    // Grant Processor Lambda permission to send messages to EssayUpdateQueue
+    processorLambdaRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ['sqs:SendMessage'],
+        resources: [essayUpdateQueue.queueArn],
       })
     );
 
@@ -444,6 +575,24 @@ export class VocabRecommendationStack extends cdk.Stack {
       value: teachersTable.tableName,
       description: 'DynamoDB table name for teachers',
       exportName: 'TeachersTableName',
+    });
+
+    new cdk.CfnOutput(this, 'StudentsTableName', {
+      value: studentsTable.tableName,
+      description: 'DynamoDB table name for students',
+      exportName: 'StudentsTableName',
+    });
+
+    new cdk.CfnOutput(this, 'AssignmentsTableName', {
+      value: assignmentsTable.tableName,
+      description: 'DynamoDB table name for assignments',
+      exportName: 'AssignmentsTableName',
+    });
+
+    new cdk.CfnOutput(this, 'ClassMetricsTableName', {
+      value: classMetricsTable.tableName,
+      description: 'DynamoDB table name for class metrics',
+      exportName: 'ClassMetricsTableName',
     });
 
     new cdk.CfnOutput(this, 'ApiLambdaRoleArn', {

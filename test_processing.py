@@ -4,14 +4,28 @@ End-to-end test for Vocabulary Essay Analyzer Processing Pipeline
 Tests the complete flow: Upload → S3 → SQS → Processor → DynamoDB
 """
 
+import os
 import requests
 import json
 import sys
 import time
+import boto3
 from typing import Dict, Any, Optional
+from botocore.exceptions import ClientError
 
 # API Base URL
-API_BASE_URL = "https://m18eg6bei9.execute-api.us-east-1.amazonaws.com/prod"
+API_BASE_URL = os.environ.get('API_URL', 'https://m18eg6bei9.execute-api.us-east-1.amazonaws.com/prod')
+
+# Cognito Configuration
+COGNITO_USER_POOL_ID = os.environ.get('COGNITO_USER_POOL_ID', 'us-east-1_65hpvHpPX')
+COGNITO_CLIENT_ID = os.environ.get('COGNITO_CLIENT_ID', 'jhnvud4iqcf15vac6nc2d2b9p')
+COGNITO_REGION = os.environ.get('COGNITO_REGION', 'us-east-1')
+
+# Test credentials
+TEST_EMAIL = os.environ.get('TEST_EMAIL', 'test-teacher@example.com')
+TEST_PASSWORD = os.environ.get('TEST_PASSWORD', 'Test1234!')
+
+cognito_client = boto3.client('cognito-idp', region_name=COGNITO_REGION)
 
 # Maximum wait time for processing (in seconds)
 MAX_WAIT_TIME = 300  # 5 minutes (matches Lambda timeout)
@@ -39,7 +53,38 @@ def print_warning(message: str):
     """Print warning message"""
     print(f"⚠️  {message}")
 
-def upload_essay(essay_text: str) -> Optional[Dict[str, Any]]:
+def get_auth_token():
+    """Get JWT token from Cognito"""
+    try:
+        response = cognito_client.initiate_auth(
+            ClientId=COGNITO_CLIENT_ID,
+            AuthFlow='USER_PASSWORD_AUTH',
+            AuthParameters={
+                'USERNAME': TEST_EMAIL,
+                'PASSWORD': TEST_PASSWORD,
+            }
+        )
+        
+        if 'ChallengeName' in response and response['ChallengeName'] == 'NEW_PASSWORD_REQUIRED':
+            challenge_response = cognito_client.respond_to_auth_challenge(
+                ClientId=COGNITO_CLIENT_ID,
+                ChallengeName='NEW_PASSWORD_REQUIRED',
+                Session=response['Session'],
+                ChallengeResponses={
+                    'USERNAME': TEST_EMAIL,
+                    'NEW_PASSWORD': TEST_PASSWORD,
+                }
+            )
+            auth_result = challenge_response['AuthenticationResult']
+        else:
+            auth_result = response['AuthenticationResult']
+        
+        return auth_result.get('IdToken') or auth_result.get('AccessToken')
+    except Exception as e:
+        print_error(f"Failed to get auth token: {str(e)}")
+        return None
+
+def upload_essay(essay_text: str, token: str) -> Optional[Dict[str, Any]]:
     """Upload an essay via the API"""
     print_section("Step 1: Uploading Essay")
     
@@ -48,10 +93,14 @@ def upload_essay(essay_text: str) -> Optional[Dict[str, Any]]:
     }
     
     try:
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {token}"
+        }
         response = requests.post(
             f"{API_BASE_URL}/essay",
             json=payload,
-            headers={"Content-Type": "application/json"},
+            headers=headers,
             timeout=30
         )
         
@@ -77,11 +126,13 @@ def upload_essay(essay_text: str) -> Optional[Dict[str, Any]]:
         print_error(f"Upload failed with exception: {str(e)}")
         return None
 
-def get_essay_status(essay_id: str) -> Optional[Dict[str, Any]]:
+def get_essay_status(essay_id: str, token: str) -> Optional[Dict[str, Any]]:
     """Get the current status of an essay"""
     try:
+        headers = {"Authorization": f"Bearer {token}"}
         response = requests.get(
             f"{API_BASE_URL}/essay/{essay_id}",
+            headers=headers,
             timeout=30
         )
         
@@ -98,7 +149,7 @@ def get_essay_status(essay_id: str) -> Optional[Dict[str, Any]]:
         print_error(f"Failed to get essay status: {str(e)}")
         return None
 
-def wait_for_processing(essay_id: str) -> Optional[Dict[str, Any]]:
+def wait_for_processing(essay_id: str, token: str) -> Optional[Dict[str, Any]]:
     """Wait for essay processing to complete"""
     print_section("Step 2: Waiting for Processing")
     
@@ -114,7 +165,7 @@ def wait_for_processing(essay_id: str) -> Optional[Dict[str, Any]]:
             print_error(f"Processing timeout after {MAX_WAIT_TIME} seconds")
             return None
         
-        essay_data = get_essay_status(essay_id)
+        essay_data = get_essay_status(essay_id, token)
         
         if not essay_data:
             return None
@@ -235,6 +286,15 @@ def test_end_to_end_processing():
     print("  Vocabulary Essay Analyzer - End-to-End Processing Test")
     print("="*60)
     
+    # Get auth token
+    print("\n=== Getting Auth Token ===")
+    token = get_auth_token()
+    if not token:
+        print_error("Failed to get auth token. Cannot run test.")
+        print("   Set TEST_EMAIL and TEST_PASSWORD environment variables")
+        return False
+    print_success("Auth token obtained")
+    
     # Test essay text (from essay_1.txt)
     test_essay = """Last weekend, our class went on a field trip to the local history museum. I was excited because I like seeing old objects and hearing the stories behind them. When we entered the building, the air smelled like dust and polish. A guide greeted us and led us through several rooms filled with artifacts.
 
@@ -245,7 +305,7 @@ In the second room, we saw clothes from different decades. Some looked fancy, wi
 By the end of the trip, I was tired but happy. I learned that history is not just about dates and battles; it's also about the small things people used every day. When I got home, I told my parents everything I saw, and they promised to take me back next month."""
     
     # Step 1: Upload essay
-    upload_result = upload_essay(test_essay)
+    upload_result = upload_essay(test_essay, token)
     
     if not upload_result:
         print_error("Failed to upload essay. Aborting test.")
@@ -254,7 +314,7 @@ By the end of the trip, I was tired but happy. I learned that history is not jus
     essay_id = upload_result['essay_id']
     
     # Step 2: Wait for processing
-    processed_data = wait_for_processing(essay_id)
+    processed_data = wait_for_processing(essay_id, token)
     
     if not processed_data:
         print_error("Processing did not complete. Aborting test.")

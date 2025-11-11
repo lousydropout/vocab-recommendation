@@ -242,8 +242,21 @@ def convert_floats_to_decimal(obj):
         return obj
 
 
-def update_dynamodb(essay_id: str, status: str, metrics: Dict[str, Any], feedback: List[Dict[str, Any]]):
-    """Update DynamoDB record with processing results"""
+def update_dynamodb(
+    essay_id: str,
+    status: str,
+    metrics: Dict[str, Any],
+    feedback: List[Dict[str, Any]],
+    teacher_id: Optional[str] = None,
+    assignment_id: Optional[str] = None,
+    student_id: Optional[str] = None
+):
+    """
+    Update DynamoDB record with processing results.
+    
+    Supports both legacy schema (essay_id as PK) and new schema (composite keys).
+    For new schema: PK = teacher_id#assignment_id, SK = student_id#essay_id
+    """
     table = dynamodb.Table(METRICS_TABLE)
     
     update_expression = "SET #status = :status, #updated_at = :updated_at"
@@ -267,6 +280,23 @@ def update_dynamodb(essay_id: str, status: str, metrics: Dict[str, Any], feedbac
         expression_attribute_names['#feedback'] = 'feedback'  # 'feedback' might also be reserved
         # Feedback should be fine (strings, booleans), but convert just in case
         expression_attribute_values[':feedback'] = convert_floats_to_decimal(feedback)
+    
+    # Add assignment metadata if available
+    if teacher_id:
+        update_expression += ", teacher_id = :teacher_id"
+        expression_attribute_values[':teacher_id'] = teacher_id
+    if assignment_id:
+        update_expression += ", assignment_id = :assignment_id"
+        expression_attribute_values[':assignment_id'] = assignment_id
+    if student_id:
+        update_expression += ", student_id = :student_id"
+        expression_attribute_values[':student_id'] = student_id
+    
+    # Determine key structure
+    # Legacy: essay_id as PK
+    # New: composite keys (will be handled separately if needed)
+    # For now, we'll use essay_id as PK and store metadata as attributes
+    # The composite key migration can be done later if needed
     
     table.update_item(
         Key={'essay_id': essay_id},
@@ -293,15 +323,29 @@ def handler(event, context):
             message_body = json.loads(record['body'])
             essay_id = message_body['essay_id']
             file_key = message_body['file_key']
+            teacher_id = message_body.get('teacher_id')
+            assignment_id = message_body.get('assignment_id')
+            student_id = message_body.get('student_id')
             
             logger.info("Processing started", extra={
                 "essay_id": essay_id,
                 "file_key": file_key,
+                "teacher_id": teacher_id,
+                "assignment_id": assignment_id,
+                "student_id": student_id,
                 "message_id": record.get('messageId'),
             })
             
             # Update status to 'processing'
-            update_dynamodb(essay_id, 'processing', None, None)
+            update_dynamodb(
+                essay_id,
+                'processing',
+                None,
+                None,
+                teacher_id=teacher_id,
+                assignment_id=assignment_id,
+                student_id=student_id
+            )
             logger.info("Status updated to processing", extra={"essay_id": essay_id})
             
             # Download essay from S3
@@ -362,7 +406,38 @@ def handler(event, context):
                 })
             
             # Update DynamoDB with results
-            update_dynamodb(essay_id, 'processed', metrics, feedback)
+            update_dynamodb(
+                essay_id,
+                'processed',
+                metrics,
+                feedback,
+                teacher_id=teacher_id,
+                assignment_id=assignment_id,
+                student_id=student_id
+            )
+            
+            # Send message to EssayUpdateQueue for aggregation (if assignment_id is present)
+            essay_update_queue_url = os.environ.get('ESSAY_UPDATE_QUEUE_URL')
+            if essay_update_queue_url and assignment_id and teacher_id:
+                try:
+                    sqs_client = boto3.client('sqs')
+                    sqs_client.send_message(
+                        QueueUrl=essay_update_queue_url,
+                        MessageBody=json.dumps({
+                            'teacher_id': teacher_id,
+                            'assignment_id': assignment_id,
+                            'essay_id': essay_id,
+                        })
+                    )
+                    logger.info("Sent message to EssayUpdateQueue", extra={
+                        "teacher_id": teacher_id,
+                        "assignment_id": assignment_id,
+                        "essay_id": essay_id,
+                    })
+                except Exception as e:
+                    logger.warning("Failed to send message to EssayUpdateQueue", extra={
+                        "error": str(e),
+                    })
             logger.info("Processing completed successfully", extra={
                 "essay_id": essay_id,
                 "metrics_computed": bool(metrics),

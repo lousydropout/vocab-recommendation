@@ -10,6 +10,7 @@ from typing import Optional
 
 from app.deps import get_teacher_context, TeacherContext
 from app.db.teachers import get_or_create_teacher
+from app.routes import students, assignments
 
 # Configure structured logging
 logger = logging.getLogger()
@@ -25,6 +26,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Include routers
+app.include_router(students.router)
+app.include_router(assignments.router)
 
 # Initialize AWS clients
 dynamodb = boto3.resource('dynamodb')

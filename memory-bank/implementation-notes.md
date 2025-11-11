@@ -75,11 +75,30 @@ vocab_recommendation/
 
 ### S3 Event Flow
 
-1. Client uploads to S3 (via presigned URL or direct)
-2. S3 triggers Lambda on `ObjectCreated` event
-3. Lambda extracts `essay_id` from S3 key
-4. Lambda sends message to SQS queue
-5. Processor Lambda consumes from SQS
+**Two Processing Flows:**
+
+1. **Legacy Flow** (`essays/{essay_id}.txt`):
+   - Client uploads via `POST /essay` API
+   - S3 key: `essays/{essay_id}.txt`
+   - S3 triggers Lambda on `ObjectCreated` event
+   - Lambda extracts existing `essay_id` from S3 key
+   - Lambda sends message to SQS queue with existing `essay_id`
+   - Processor Lambda consumes from SQS
+
+2. **Assignment Flow** (`{teacher_id}/assignments/{assignment_id}/...`):
+   - Client gets presigned URL via `POST /assignments/{id}/upload-url`
+   - Client uploads file (single .txt/.md or .zip) to S3
+   - S3 key: `{teacher_id}/assignments/{assignment_id}/{file_name}`
+   - S3 triggers Lambda on `ObjectCreated` event
+   - Lambda extracts `teacher_id` and `assignment_id` from S3 key path
+   - For zip files: Extracts all .txt/.md files from zip
+   - For each essay: Extracts student name, matches/creates student, generates new `essay_id`
+   - Lambda sends SQS message per essay with `teacher_id`, `assignment_id`, `student_id`
+   - Processor Lambda consumes from SQS and stores metadata
+
+**Bug Fix (2025-11-11):**
+- Legacy essays were incorrectly calling `process_single_essay()` which generated new `essay_id` and tried to re-upload
+- Fixed: Legacy essays now directly send SQS message with existing `essay_id` from S3 key
 
 ### DynamoDB Updates
 
@@ -196,16 +215,35 @@ vocab_recommendation/
    - All tests passing
 
 ### Lambda Function Tests ✅
-1. ✅ **End-to-End Integration Test**: Created `test_processing.py`
+1. ✅ **End-to-End Integration Test (Legacy Flow)**: `test_processing.py`
    - Tests complete flow: upload → S3 → SQS → Processor → DynamoDB
    - Validates metrics calculation (word count, unique words, type-token ratio, POS distribution)
    - Validates Bedrock feedback generation (20 words evaluated)
    - Validates DynamoDB storage and retrieval
+   - **Updated**: Now includes authentication (Cognito JWT token)
    - All tests passing ✅
-   - Processing time: ~37 seconds for typical essay
-2. ⏳ **Unit Tests**: Test processor logic with mock Bedrock responses (future enhancement)
-3. ⏳ **Load Tests**: Verify < 60s end-to-end latency (validated in integration test)
-4. ⏳ **Error Tests**: Test DLQ, timeout, and error scenarios (future enhancement)
+   - Processing time: ~30-35 seconds for typical essay
+
+2. ✅ **End-to-End Integration Test (Assignment Flow)**: `test_assignment_flow.py`
+   - Tests assignment creation → presigned URL → file upload → S3 trigger → processing
+   - Tests both single file and zip file uploads
+   - Validates student name extraction and matching
+   - Validates S3 trigger processing for assignment essays
+   - All tests passing ✅
+
+3. ✅ **Epic 7 Integration Tests**: `test_epic7.py`
+   - Tests Students CRUD operations (create, list, get, update, delete)
+   - Tests Assignments CRUD operations (create, list, get, presigned URL)
+   - Tests authentication and authorization
+   - All tests passing ✅
+
+4. ✅ **Unit Tests**:
+   - `lambda/api/tests/test_students.py` - Student database operations (all passing)
+   - `lambda/api/tests/test_assignments.py` - Assignment database operations (all passing)
+   - `lambda/s3_upload_trigger/tests/test_name_extraction.py` - Name extraction patterns (all passing)
+
+5. ⏳ **Load Tests**: Verify < 60s end-to-end latency (validated in integration test)
+6. ⏳ **Error Tests**: Test DLQ, timeout, and error scenarios (future enhancement)
 
 ### Frontend Tests ✅
 1. ✅ **API Client Tests**: `lib/api.test.ts` (4 tests)
@@ -239,7 +277,12 @@ vocab_recommendation/
    - Mocking: API functions mocked for component tests
    - User interactions: Tested with `@testing-library/user-event`
 
-5. **Browser Integration Tests** (Planned)
+5. ✅ **Frontend Build Fixes**:
+   - Fixed Vite 7 build issue by renaming `main.tsx` to `main.jsx` and using JavaScript entry point
+   - Updated Vite config to handle `.js` files with JSX syntax
+   - Build now completes successfully ✅
+
+6. **Browser Integration Tests** (Planned)
    - Setup: `@vitest/browser-playwright` with Chromium
    - Configuration: `vite.config.ts` with browser provider
    - Run with: `npm run test:browser`
@@ -328,7 +371,11 @@ All resource names and ARNs are exported as CloudFormation outputs for easy refe
 - **JWKS:** Fetched from Cognito `.well-known/jwks.json` endpoint
 - **Caching:** JWKS cached in memory after first fetch
 - **Token Claims:** Extracts `sub` as `teacher_id`, `email` for display
-- **Validation:** Verifies signature, issuer, expiration
+- **Validation:** Verifies signature, issuer, expiration, audience
+- **Bug Fix (2025-11-11):** Fixed JWT audience validation - now explicitly validates `aud` claim using `COGNITO_USER_POOL_CLIENT_ID`
+  - Issue: JWT tokens from Cognito include `aud` claim, but `jose.jwt.decode` was skipping audience validation
+  - Fix: Added `COGNITO_USER_POOL_CLIENT_ID` environment variable and explicit audience validation
+  - Result: Script-created Cognito users can now authenticate successfully
 
 ### Teachers Table
 - **Table Name:** `VincentVocabTeachers`

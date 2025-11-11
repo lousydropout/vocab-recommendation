@@ -14,6 +14,7 @@ logger = logging.getLogger()
 # Cognito configuration from environment
 COGNITO_USER_POOL_ID = os.environ.get('COGNITO_USER_POOL_ID')
 COGNITO_REGION = os.environ.get('COGNITO_REGION', 'us-east-1')
+COGNITO_CLIENT_ID = os.environ.get('COGNITO_USER_POOL_CLIENT_ID')  # For audience validation
 COGNITO_ISSUER = f'https://cognito-idp.{COGNITO_REGION}.amazonaws.com/{COGNITO_USER_POOL_ID}'
 
 # Cache for JWKs (JSON Web Key Set)
@@ -81,17 +82,28 @@ def verify_token(token: str) -> Optional[Dict]:
             return None
         
         # Verify and decode the token
+        # Cognito IdTokens have audience set to the Client ID
+        decode_options = {
+            "verify_signature": True,
+            "verify_iss": True,
+            "verify_exp": True,
+        }
+        
+        # If client ID is available, verify audience; otherwise skip audience check
+        if COGNITO_CLIENT_ID:
+            decode_options["verify_aud"] = True
+            audience = COGNITO_CLIENT_ID
+        else:
+            decode_options["verify_aud"] = False
+            audience = None
+        
         claims = jwt.decode(
             token,
             key,
             algorithms=['RS256'],
-            audience=None,  # Cognito tokens don't always have audience
+            audience=audience,
             issuer=COGNITO_ISSUER,
-            options={
-                "verify_signature": True,
-                "verify_iss": True,
-                "verify_exp": True,
-            }
+            options=decode_options
         )
         
         logger.info("Token verified successfully", extra={"sub": claims.get('sub')})

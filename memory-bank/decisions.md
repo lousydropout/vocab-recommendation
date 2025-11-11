@@ -50,7 +50,48 @@
 
 ---
 
-### D-004: Bedrock Claude 3 Model
+### D-004: Docker Container for spaCy (Revised from D-002)
+**Date**: 2025-11-10  
+**Status**: Accepted  
+**Context**: Lambda layer size limit (250MB unzipped) exceeded by spaCy + model  
+**Decision**: Switch to Docker container image for Processor Lambda  
+**Rationale**:
+- Docker containers support larger dependencies (>10GB)
+- spaCy + en_core_web_sm model fits comfortably
+- CDK handles ECR image building automatically
+
+**Alternatives Considered**:
+- Lambda Layer: Size limit exceeded
+- Download model at runtime: Too slow for cold starts
+
+---
+
+### D-005: Two Processing Flows (Legacy vs Assignment)
+**Date**: 2025-11-11  
+**Status**: Accepted  
+**Context**: Need to support both simple essay uploads and assignment-based batch uploads  
+**Decision**: Implement two distinct processing flows:
+1. **Legacy Flow**: `POST /essay` → `essays/{essay_id}.txt` → Simple SQS message
+2. **Assignment Flow**: `POST /assignments/{id}/upload-url` → `{teacher_id}/assignments/{assignment_id}/...` → Student extraction → Full processing
+
+**Rationale**:
+- Maintains backward compatibility with existing `/essay` endpoint
+- Enables new assignment-based features (student tracking, batch uploads)
+- Clear separation of concerns
+- S3 key path determines processing flow
+
+**Implementation Details**:
+- Legacy essays: Use existing `essay_id` from S3 key, no student matching
+- Assignment essays: Extract student names, match/create students, generate new `essay_id`
+- S3 trigger Lambda routes based on key prefix pattern
+
+**Bug Fix (2025-11-11)**:
+- Fixed legacy essay processing bug where `process_single_essay()` was incorrectly called
+- Legacy essays now directly send SQS message with existing `essay_id`
+
+---
+
+### D-006: Bedrock Claude 3 Model
 **Date**: 2025-01-XX  
 **Status**: Accepted  
 **Context**: Need LLM for word-level evaluation  
@@ -66,7 +107,7 @@
 
 ---
 
-### D-005: DynamoDB for State Management
+### D-007: DynamoDB for State Management
 **Date**: 2025-01-XX  
 **Status**: Accepted  
 **Context**: Need to track essay status and results  
@@ -82,7 +123,7 @@
 
 ---
 
-### D-006: Presigned URL for Uploads
+### D-008: Presigned URL for Uploads
 **Date**: 2025-01-XX  
 **Status**: Accepted  
 **Context**: Need efficient file upload mechanism  
@@ -94,7 +135,7 @@
 
 ---
 
-### D-007: Plain Text Input Only
+### D-009: Plain Text Input Only
 **Date**: 2025-01-XX  
 **Status**: Accepted  
 **Context**: Simplify PoC scope  

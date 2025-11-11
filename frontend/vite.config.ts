@@ -11,10 +11,18 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
+  optimizeDeps: {
+    include: ['react', 'react-dom', 'react-router-dom'],
+    esbuildOptions: {
+      loader: {
+        '.js': 'jsx',
+        '.tsx': 'tsx',
+      },
+    },
+  },
   esbuild: {
     loader: 'jsx',
-    include: /src\/.*\.jsx?$/,
-    exclude: [],
+    include: /src\/.*\.(jsx|js|tsx|ts)$/,
   },
   // @ts-expect-error - vitest types
   test: {

@@ -301,17 +301,39 @@
 
 ### 🔄 Epic 7 — Student & Assignment Management + Batch Uploads - IN PROGRESS
 
-**Status:** Not Started
+**Status:** Backend Complete, Frontend Pending
 
 **Goal:** Teachers can manage students and upload multiple essays per assignment.
 
-**Key Tasks:**
-- Add `Students` and `Assignments` tables
-- Add CRUD endpoints for students and assignments
-- Extend S3 trigger Lambda to extract student names (spaCy NER)
-- Update DynamoDB schema for EssayMetrics (teacher_id, assignment_id, student_id)
-- Add aggregation Lambda for ClassMetrics
-- Frontend: Student management UI, assignment creation, batch upload
+**Completed (Backend):**
+- ✅ `Students` DynamoDB table created (partition key: `teacher_id`, sort key: `student_id`)
+- ✅ `Assignments` DynamoDB table created (partition key: `teacher_id`, sort key: `assignment_id`)
+- ✅ `ClassMetrics` DynamoDB table created (partition key: `teacher_id`, sort key: `assignment_id`)
+- ✅ Students CRUD endpoints: POST, GET, GET/{id}, PATCH, DELETE
+- ✅ Assignments CRUD endpoints: POST, GET, GET/{id}, POST/{id}/upload-url
+- ✅ S3 trigger Lambda enhanced:
+  - Handles both legacy essays (`essays/{essay_id}.txt`) and assignment essays (`{teacher_id}/assignments/{assignment_id}/...`)
+  - Extracts student names using regex patterns (4 patterns)
+  - Fuzzy matches to existing students using `rapidfuzz` (85% threshold)
+  - Creates students automatically if not found
+  - Processes zip files (extracts .txt/.md files)
+  - **Bug Fix**: Legacy essays now correctly use existing `essay_id` instead of generating new one
+- ✅ Aggregation Lambda created for ClassMetrics computation
+- ✅ `EssayUpdateQueue` created to trigger aggregations
+- ✅ Processor Lambda updated to store `teacher_id`, `assignment_id`, `student_id`
+- ✅ Integration tests: `test_epic7.py`, `test_assignment_flow.py` (both passing)
+- ✅ Unit tests: Students, Assignments, Name Extraction (all passing)
+
+**Pending (Frontend):**
+- ⏳ Student management UI (list, create, edit, delete)
+- ⏳ Assignment creation UI with batch upload (zip or multi-part)
+
+**Key Technical Details:**
+- **Two Processing Flows:**
+  1. **Legacy Flow**: `POST /essay` → `essays/{essay_id}.txt` → Simple SQS message with existing `essay_id`
+  2. **Assignment Flow**: `POST /assignments/{id}/upload-url` → `{teacher_id}/assignments/{assignment_id}/...` → Student name extraction → New `essay_id` generated → Full processing
+- **Student Name Extraction**: Regex patterns (Name:, Name — Grade, By Name, First capitalized words)
+- **Student Matching**: Fuzzy string matching with 85% similarity threshold
 
 ---
 
@@ -331,13 +353,49 @@
 
 ---
 
+## Recent Updates (2025-11-11)
+
+### Bug Fixes
+1. ✅ **Legacy Essay Processing Bug**: Fixed S3 upload trigger Lambda incorrectly processing legacy essays
+   - Issue: Legacy essays were calling `process_single_essay()` which generated new `essay_id` and tried to re-upload
+   - Fix: Legacy essays now directly send SQS message with existing `essay_id` from S3 key
+   - Impact: Legacy essays uploaded via `/essay` API now process correctly
+
+2. ✅ **JWT Validation Bug**: Fixed JWT audience validation for script-created Cognito users
+   - Issue: JWT tokens from Cognito include `aud` claim, but validation was being skipped
+   - Fix: Added explicit audience validation using `COGNITO_USER_POOL_CLIENT_ID`
+   - Impact: All Cognito users (including script-created) can now authenticate
+
+3. ✅ **Logging Bug**: Fixed "Attempt to overwrite 'name' in LogRecord" error
+   - Issue: Using reserved `"name"` key in logging `extra` dict
+   - Fix: Changed to `"student_name"`, `"assignment_name"`, `"extracted_name"`
+   - Impact: All logging operations now work correctly
+
+4. ✅ **Frontend Build Bug**: Fixed Vite 7 build issue with TSX files
+   - Issue: Vite's build-html plugin couldn't parse TSX files before React plugin transformed them
+   - Fix: Renamed `main.tsx` to `main.jsx` and created JavaScript entry point
+   - Impact: Frontend builds successfully for production
+
+### Testing
+1. ✅ **Integration Tests**: Created comprehensive test suite for both processing flows
+   - `test_processing.py` - Legacy flow (updated with authentication)
+   - `test_assignment_flow.py` - Assignment flow (new, tests single file + zip upload)
+   - `test_epic7.py` - Students and Assignments CRUD operations
+   - All tests passing ✅
+
+2. ✅ **Unit Tests**: Added tests for Epic 7 features
+   - Students database operations
+   - Assignments database operations
+   - Name extraction patterns
+   - All tests passing ✅
+
 ## Next Steps
 
 1. ✅ **Stack Renamed & Redeployed**: All resources now prefixed with `vincent-vocab-`
 2. ✅ **Epic 6 (Backend):** Cognito authentication and teacher management - COMPLETE
-3. ⏳ **Epic 6 (Frontend):** Add login/logout UI and token management (Task 6.4)
-4. ⏳ **Epic 6 (Tests):** Add unit and integration tests (Task 6.5)
-5. ⏳ **Epic 7:** Implement student/assignment management and batch uploads
+3. ✅ **Epic 6 (Tests):** Unit and integration tests - COMPLETE
+4. ✅ **Epic 7 (Backend):** Student/assignment management and batch uploads - COMPLETE
+5. ⏳ **Epic 7 (Frontend):** Student management UI, assignment creation UI with batch upload
 6. ⏳ **Epic 8:** Implement analytics dashboards and teacher override functionality
 7. Deploy frontend to production (S3 + CloudFront, or Vercel/Netlify)
 8. Configure SNS topic subscriptions (email, Slack, etc.) for alarm notifications

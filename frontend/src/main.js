@@ -1,8 +1,3 @@
-import { StrictMode } from 'react';
-import { createRoot } from 'react-dom/client';
-import './index.css';
-import App from './App.tsx';
-createRoot(document.getElementById('root')).render(<StrictMode>
-    <App />
-  </StrictMode>);
-//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoibWFpbi5qcyIsInNvdXJjZVJvb3QiOiIiLCJzb3VyY2VzIjpbIm1haW4udHN4Il0sIm5hbWVzIjpbXSwibWFwcGluZ3MiOiJBQUFBLE9BQU8sRUFBRSxVQUFVLEVBQUUsTUFBTSxPQUFPLENBQUE7QUFDbEMsT0FBTyxFQUFFLFVBQVUsRUFBRSxNQUFNLGtCQUFrQixDQUFBO0FBQzdDLE9BQU8sYUFBYSxDQUFBO0FBQ3BCLE9BQU8sR0FBRyxNQUFNLFdBQVcsQ0FBQTtBQUUzQixVQUFVLENBQUMsUUFBUSxDQUFDLGNBQWMsQ0FBQyxNQUFNLENBQUUsQ0FBQyxDQUFDLE1BQU0sQ0FDakQsQ0FBQyxVQUFVLENBQ1Q7SUFBQSxDQUFDLEdBQUcsQ0FBQyxBQUFELEVBQ047RUFBQSxFQUFFLFVBQVUsQ0FBQyxDQUNkLENBQUEiLCJzb3VyY2VzQ29udGVudCI6WyJpbXBvcnQgeyBTdHJpY3RNb2RlIH0gZnJvbSAncmVhY3QnXG5pbXBvcnQgeyBjcmVhdGVSb290IH0gZnJvbSAncmVhY3QtZG9tL2NsaWVudCdcbmltcG9ydCAnLi9pbmRleC5jc3MnXG5pbXBvcnQgQXBwIGZyb20gJy4vQXBwLnRzeCdcblxuY3JlYXRlUm9vdChkb2N1bWVudC5nZXRFbGVtZW50QnlJZCgncm9vdCcpISkucmVuZGVyKFxuICA8U3RyaWN0TW9kZT5cbiAgICA8QXBwIC8+XG4gIDwvU3RyaWN0TW9kZT4sXG4pXG4iXX0=
+// Entry point that imports the JSX file
+import './main.jsx'
+

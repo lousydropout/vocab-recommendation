@@ -471,31 +471,41 @@
 
 ### Backend Tasks
 
-1. ⏳ **Add `Students` table and `/students` CRUD endpoints**
+1. ✅ **Add `Students` table and `/students` CRUD endpoints**
    - Partition key: `teacher_id`, Sort key: `student_id`
+   - Implemented: `POST /students`, `GET /students`, `GET /students/{id}`, `PATCH /students/{id}`, `DELETE /students/{id}`
+   - Unit tests: `lambda/api/tests/test_students.py` (all passing)
 
-2. ⏳ **Add `Assignments` table and `/assignments` CRUD endpoints**
+2. ✅ **Add `Assignments` table and `/assignments` CRUD endpoints**
    - Partition key: `teacher_id`, Sort key: `assignment_id`
+   - Implemented: `POST /assignments`, `GET /assignments`, `GET /assignments/{id}`, `POST /assignments/{id}/upload-url`
+   - Unit tests: `lambda/api/tests/test_assignments.py` (all passing)
 
-3. ⏳ **Extend API Lambda:**
-   - `POST /assignments/{id}/upload`
-   - Generate S3 presigned URL for batch upload
+3. ✅ **Extend API Lambda:**
+   - `POST /assignments/{id}/upload-url` - Generate S3 presigned URL for batch upload
+   - Presigned URLs expire in 15 minutes
+   - File key format: `{teacher_id}/assignments/{assignment_id}/{file_name}`
 
-4. ⏳ **Extend S3 trigger Lambda:**
-   - Detect assignment metadata
-   - Extract student names using spaCy NER (`PERSON`) or regex
-   - Fuzzy-match to existing students (Levenshtein distance < 0.2)
-   - Create student record if missing
-   - Send one SQS message per essay with assignment_id + student_id
+4. ✅ **Extend S3 trigger Lambda:**
+   - Detects assignment metadata from S3 key path
+   - Extracts student names using regex patterns (4 patterns implemented)
+   - Fuzzy-matches to existing students using `rapidfuzz` (85% threshold)
+   - Creates student record if missing
+   - Handles both single files and zip archives
+   - Sends SQS message per essay with `assignment_id`, `student_id`, `teacher_id`
+   - **Bug Fix**: Fixed legacy essay processing - legacy essays now use existing `essay_id` instead of generating new one
 
 5. ⏳ **Update DynamoDB schema for EssayMetrics**
-   - Change partition key to `teacher_id#assignment_id`
-   - Change sort key to `student_id#essay_id`
-   - Include teacher_id, assignment_id, student_id in all records
+   - **Deferred**: Maintaining backward compatibility with existing `essay_id` as partition key
+   - Currently stores `teacher_id`, `assignment_id`, `student_id` as attributes
+   - Future: Consider composite keys for better query patterns
 
-6. ⏳ **Add aggregation Lambda to compute assignment-level averages**
-   - Store in ClassMetrics table
-   - Triggered by essay updates or scheduled
+6. ✅ **Add aggregation Lambda to compute assignment-level averages**
+   - Created `ClassMetrics` table (partition key: `teacher_id`, sort key: `assignment_id`)
+   - Created `EssayUpdateQueue` for triggering aggregations
+   - Aggregation Lambda: `vincent-vocab-aggregation-lambda`
+   - Computes averages: TTR, frequency rank, correctness
+   - Triggered by essay processing completion
 
 ### Frontend Tasks
 
@@ -512,8 +522,18 @@
 
 ### Tests
 
-- Integration: upload .zip → multiple EssayMetrics created
-- Unit: name extraction accuracy ≥ 90% on sample essays
+- ✅ **Integration Tests:**
+  - `test_epic7.py` - Students and Assignments CRUD operations (all passing)
+  - `test_assignment_flow.py` - End-to-end assignment flow (single file + zip upload)
+  - `test_processing.py` - Legacy flow end-to-end test (updated with authentication)
+- ✅ **Unit Tests:**
+  - `lambda/api/tests/test_students.py` - Student CRUD operations (all passing)
+  - `lambda/api/tests/test_assignments.py` - Assignment CRUD operations (all passing)
+  - `lambda/s3_upload_trigger/tests/test_name_extraction.py` - Name extraction patterns (all passing)
+- ✅ **CDK Unit Tests:**
+  - Updated to test new DynamoDB tables (Students, Assignments, ClassMetrics)
+  - Updated to test new SQS queue (EssayUpdateQueue)
+  - Updated to test Aggregation Lambda
 
 ---
 
