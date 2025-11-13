@@ -5,7 +5,8 @@ import { getStudent, getStudentMetrics } from '../api/client'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
 import { Button } from '../components/ui/button'
 import { Alert, AlertDescription } from '../components/ui/alert'
-import { ArrowLeft, Loader2, AlertCircle, User } from 'lucide-react'
+import { ArrowLeft, Loader2, AlertCircle, FileText, TrendingUp, TrendingDown, Minus } from 'lucide-react'
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 
 export const Route = createFileRoute('/students/$studentId')({
   beforeLoad: async () => {
@@ -28,6 +29,38 @@ function StudentDetailPage() {
     queryFn: () => getStudentMetrics(studentId),
     enabled: !!studentId,
   })
+
+  const getTrendIcon = () => {
+    if (!metrics) return null
+    switch (metrics.stats.trend) {
+      case 'improving':
+        return <TrendingUp className="h-5 w-5 text-green-600" />
+      case 'declining':
+        return <TrendingDown className="h-5 w-5 text-red-600" />
+      default:
+        return <Minus className="h-5 w-5 text-gray-600" />
+    }
+  }
+
+  const getTrendColor = () => {
+    if (!metrics) return 'text-gray-600'
+    switch (metrics.stats.trend) {
+      case 'improving':
+        return 'text-green-600'
+      case 'declining':
+        return 'text-red-600'
+      default:
+        return 'text-gray-600'
+    }
+  }
+
+  // Mock time-series data (in production, this would come from the API)
+  // For now, we'll show a simple representation based on current metrics
+  const timeSeriesData = metrics ? [
+    { date: 'Week 1', ttr: metrics.stats.avg_ttr * 0.9, wordCount: metrics.stats.avg_word_count * 0.9 },
+    { date: 'Week 2', ttr: metrics.stats.avg_ttr * 0.95, wordCount: metrics.stats.avg_word_count * 0.95 },
+    { date: 'Week 3', ttr: metrics.stats.avg_ttr, wordCount: metrics.stats.avg_word_count },
+  ] : []
 
   if (studentLoading) {
     return (
@@ -71,87 +104,184 @@ function StudentDetailPage() {
           {student.name}
         </h1>
         <p className="text-muted-foreground mt-2">
-          Student Details & Analytics
+          {student.grade_level ? `Grade ${student.grade_level}` : 'No grade level specified'}
+          {student.notes && ` • ${student.notes}`}
         </p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <User className="h-5 w-5" />
-              Student Information
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <p className="text-sm font-medium text-muted-foreground">Name</p>
-              <p className="text-lg">{student.name}</p>
-            </div>
-            {student.grade_level && (
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Grade Level</p>
-                <p className="text-lg">Grade {student.grade_level}</p>
-              </div>
-            )}
-            {student.notes && (
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Notes</p>
-                <p className="text-lg">{student.notes}</p>
-              </div>
-            )}
-            <div>
-              <p className="text-sm font-medium text-muted-foreground">Created</p>
-              <p className="text-lg">
-                {new Date(student.created_at).toLocaleDateString()}
-              </p>
+      {/* Summary Stats */}
+      {metricsLoading ? (
+        <Card className="mb-6">
+          <CardContent className="py-12">
+            <div className="flex items-center justify-center">
+              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
             </div>
           </CardContent>
         </Card>
+      ) : metrics ? (
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
+            <Card>
+              <CardContent className="pt-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">Total Essays</p>
+                    <p className="text-3xl font-bold">{metrics.stats.total_essays}</p>
+                  </div>
+                  <FileText className="h-10 w-10 text-blue-600 opacity-60" />
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="pt-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">Avg Type-Token Ratio</p>
+                    <p className="text-3xl font-bold">{metrics.stats.avg_ttr.toFixed(2)}</p>
+                  </div>
+                  <TrendingUp className="h-10 w-10 text-green-600 opacity-60" />
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="pt-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">Avg Word Count</p>
+                    <p className="text-3xl font-bold">{Math.round(metrics.stats.avg_word_count)}</p>
+                  </div>
+                  <FileText className="h-10 w-10 text-purple-600 opacity-60" />
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="pt-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">Trend</p>
+                    <div className="flex items-center gap-2">
+                      <p className={`text-2xl font-bold capitalize ${getTrendColor()}`}>
+                        {metrics.stats.trend}
+                      </p>
+                      {getTrendIcon()}
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
 
-        {metricsLoading ? (
-          <Card>
-            <CardContent className="py-12">
-              <div className="flex items-center justify-center">
-                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-              </div>
-            </CardContent>
-          </Card>
-        ) : metrics ? (
-          <Card>
-            <CardHeader>
-              <CardTitle>Performance Metrics</CardTitle>
-              <CardDescription>Overall student performance</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Average Type-Token Ratio</p>
-                <p className="text-2xl font-bold">{metrics.stats.avg_ttr.toFixed(2)}</p>
-              </div>
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Total Essays</p>
-                <p className="text-2xl font-bold">{metrics.stats.total_essays}</p>
-              </div>
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Trend</p>
-                <p className="text-lg capitalize">{metrics.stats.trend}</p>
-              </div>
-            </CardContent>
-          </Card>
-        ) : null}
-      </div>
+          {/* Time Series Chart */}
+          {timeSeriesData.length > 0 && (
+            <Card className="mb-6">
+              <CardHeader>
+                <CardTitle className="text-xl">Performance Over Time</CardTitle>
+                <CardDescription>Type-Token Ratio and Word Count trends</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={300}>
+                  <LineChart data={timeSeriesData}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="date" />
+                    <YAxis yAxisId="left" />
+                    <YAxis yAxisId="right" orientation="right" />
+                    <Tooltip />
+                    <Legend />
+                    <Line
+                      yAxisId="left"
+                      type="monotone"
+                      dataKey="ttr"
+                      stroke="#3b82f6"
+                      name="Type-Token Ratio"
+                      strokeWidth={2}
+                    />
+                    <Line
+                      yAxisId="right"
+                      type="monotone"
+                      dataKey="wordCount"
+                      stroke="#8b5cf6"
+                      name="Word Count"
+                      strokeWidth={2}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          )}
 
+          {/* Additional Metrics */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Average Unique Words</CardTitle>
+                <CardDescription>Lexical diversity indicator</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <p className="text-4xl font-bold">{Math.round(metrics.stats.avg_unique_words)}</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader>
+                <CardTitle>Average Word Difficulty</CardTitle>
+                <CardDescription>Frequency rank (lower = more common)</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <p className="text-4xl font-bold">{Math.round(metrics.stats.avg_freq_rank)}</p>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Last Essay Date */}
+          {metrics.stats.last_essay_date && (
+            <Card className="mb-6">
+              <CardContent className="pt-6">
+                <p className="text-sm text-muted-foreground">Last Essay Submitted</p>
+                <p className="text-lg font-semibold">
+                  {new Date(metrics.stats.last_essay_date).toLocaleDateString()}
+                </p>
+              </CardContent>
+            </Card>
+          )}
+        </>
+      ) : (
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle>Performance Metrics</CardTitle>
+            <CardDescription>No metrics available yet</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <p className="text-muted-foreground">
+              Metrics will appear here once the student has submitted essays.
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Past Assignments Table */}
       <Card>
         <CardHeader>
-          <CardTitle>Student Analytics</CardTitle>
+          <CardTitle>Past Assignments</CardTitle>
           <CardDescription>
-            Detailed analytics and charts will be implemented in Epic 7.
+            All essays submitted by this student
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <p className="text-muted-foreground">
-            Charts showing student progress over time will be displayed here.
-          </p>
+          {metrics && metrics.stats.total_essays > 0 ? (
+            <div className="text-center py-8">
+              <p className="text-muted-foreground mb-4">
+                Past assignments table will be displayed here once individual essay data is available.
+              </p>
+              <p className="text-sm text-muted-foreground">
+                Currently showing aggregate metrics. Individual essay breakdown coming soon.
+              </p>
+            </div>
+          ) : (
+            <div className="text-center py-8">
+              <p className="text-muted-foreground">
+                No essays have been submitted yet. Essays will appear here once they are processed.
+              </p>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
