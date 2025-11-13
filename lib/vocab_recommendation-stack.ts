@@ -12,6 +12,10 @@ import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as cloudwatchActions from 'aws-cdk-lib/aws-cloudwatch-actions';
 import * as sns from 'aws-cdk-lib/aws-sns';
 import * as cognito from 'aws-cdk-lib/aws-cognito';
+import * as ecs from 'aws-cdk-lib/aws-ecs';
+import * as ec2 from 'aws-cdk-lib/aws-ec2';
+import * as ecr_assets from 'aws-cdk-lib/aws-ecr-assets';
+import * as logs from 'aws-cdk-lib/aws-logs';
 import * as path from 'path';
 
 export class VocabRecommendationStack extends cdk.Stack {
@@ -160,26 +164,24 @@ export class VocabRecommendationStack extends cdk.Stack {
     essaysBucket.grantRead(s3UploadLambdaRole);
     processingQueue.grantSendMessages(s3UploadLambdaRole);
 
-    // IAM Role for Processor Lambda (will be used in Epic 3)
-    const processorLambdaRole = new iam.Role(this, 'ProcessorLambdaRole', {
-      roleName: 'vincent-vocab-processor-lambda-role',
-      assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
-      description: 'IAM role for essay processor Lambda function',
-      managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaBasicExecutionRole'),
-      ],
+    // IAM Role for Processor ECS Task (replaces Processor Lambda)
+    const processorTaskRole = new iam.Role(this, 'ProcessorTaskRole', {
+      roleName: 'vincent-vocab-processor-task-role',
+      assumedBy: new iam.ServicePrincipal('ecs-tasks.amazonaws.com'),
+      description: 'IAM role for essay processor ECS task',
     });
 
-    // Grant permissions for Processor Lambda
-    essaysBucket.grantRead(processorLambdaRole);
-    metricsTable.grantReadWriteData(processorLambdaRole);
-    studentsTable.grantReadData(processorLambdaRole);
-    assignmentsTable.grantReadData(processorLambdaRole);
-    classMetricsTable.grantReadWriteData(processorLambdaRole);
-    processingQueue.grantConsumeMessages(processorLambdaRole);
+    // Grant permissions for Processor ECS Task
+    essaysBucket.grantRead(processorTaskRole);
+    metricsTable.grantReadWriteData(processorTaskRole);
+    studentsTable.grantReadData(processorTaskRole);
+    assignmentsTable.grantReadData(processorTaskRole);
+    classMetricsTable.grantReadWriteData(processorTaskRole);
+    processingQueue.grantConsumeMessages(processorTaskRole);
+    essayUpdateQueue.grantSendMessages(processorTaskRole);
 
-    // Grant Bedrock permissions for Processor Lambda
-    processorLambdaRole.addToPolicy(
+    // Grant Bedrock permissions for Processor Task
+    processorTaskRole.addToPolicy(
       new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
         actions: ['bedrock:InvokeModel'],
@@ -244,9 +246,11 @@ export class VocabRecommendationStack extends cdk.Stack {
             image: lambda.Runtime.PYTHON_3_12.bundlingImage,
             command: [
               'bash', '-c',
-              'pip install -r requirements.txt -t /asset-output && cp -au . /asset-output',
+              'pip install -r requirements.txt -t /asset-output && ' +
+              'cp -r app lambda_function.py main.py pytest.ini /asset-output 2>/dev/null || true',
             ],
           },
+          exclude: ['venv', '__pycache__', 'tests', '*.pyc', '*.pyo', '.pytest_cache'],
         });
     
     const apiLambda = new lambda.Function(this, 'ApiLambda', {
@@ -281,9 +285,11 @@ export class VocabRecommendationStack extends cdk.Stack {
             image: lambda.Runtime.PYTHON_3_12.bundlingImage,
             command: [
               'bash', '-c',
-              'pip install -r requirements.txt -t /asset-output && cp -au . /asset-output',
+              'pip install -r requirements.txt -t /asset-output && ' +
+              'cp -r lambda_function.py name_extraction.py student_matching.py /asset-output 2>/dev/null || true',
             ],
           },
+          exclude: ['__pycache__', 'tests', '*.pyc', '*.pyo', '.pytest_cache'],
         });
     
     const s3UploadLambda = new lambda.Function(this, 'S3UploadLambda', {
@@ -390,35 +396,84 @@ export class VocabRecommendationStack extends cdk.Stack {
     const essayOverrideResource = essayIdResourceOverride.addResource('override');
     essayOverrideResource.addMethod('PATCH', apiIntegration, authorizerOptions); // Override essay feedback
 
-    // Processor Lambda Function (Container Image)
-    // Using container image instead of layer due to size limits (spaCy + model > 250MB)
-    const processorLambda = new lambda.DockerImageFunction(this, 'ProcessorLambda', {
-      functionName: 'vincent-vocab-processor-lambda',
-      code: lambda.DockerImageCode.fromImageAsset(
-        path.join(__dirname, '../lambda/processor'),
-        {
-          // Dockerfile is in lambda/processor/Dockerfile
-        }
-      ),
-      role: processorLambdaRole,
-      timeout: cdk.Duration.minutes(5), // Must match SQS visibility timeout
-      memorySize: 3008, // High memory for spaCy model loading
+    // ============================================
+    // ECS Fargate Worker Service (replaces Processor Lambda)
+    // ============================================
+
+    // Look up default VPC
+    const vpc = ec2.Vpc.fromLookup(this, 'DefaultVPC', {
+      isDefault: true,
+    });
+
+    // Docker image asset for processor
+    const processorImage = new ecr_assets.DockerImageAsset(this, 'ProcessorImage', {
+      directory: path.join(__dirname, '../lambda/processor'),
+    });
+
+    // CloudWatch Log Group for ECS service
+    const processorLogGroup = new logs.LogGroup(this, 'ProcessorLogGroup', {
+      logGroupName: '/ecs/vocab-processor',
+      retention: logs.RetentionDays.ONE_MONTH,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+    });
+
+    // ECS Cluster
+    const cluster = new ecs.Cluster(this, 'ProcessorCluster', {
+      clusterName: 'vincent-vocab-processor-cluster',
+      vpc,
+    });
+
+    // Fargate Task Definition
+    const taskDefinition = new ecs.FargateTaskDefinition(this, 'ProcessorTaskDefinition', {
+      cpu: 2048, // 2 vCPU
+      memoryLimitMiB: 4096, // 4 GB
+      taskRole: processorTaskRole,
+    });
+
+    // Add container to task definition
+    const container = taskDefinition.addContainer('ProcessorContainer', {
+      image: ecs.ContainerImage.fromDockerImageAsset(processorImage),
+      logging: ecs.LogDrivers.awsLogs({
+        streamPrefix: 'processor',
+        logGroup: processorLogGroup,
+      }),
       environment: {
-        ESSAYS_BUCKET: essaysBucket.bucketName,
+        PROCESSING_QUEUE_URL: processingQueue.queueUrl,
         METRICS_TABLE: metricsTable.tableName,
+        ESSAYS_BUCKET: essaysBucket.bucketName,
         BEDROCK_MODEL_ID: 'anthropic.claude-3-sonnet-20240229-v1:0',
         ESSAY_UPDATE_QUEUE_URL: essayUpdateQueue.queueUrl,
-        // AWS_REGION is automatically set by Lambda runtime
+        AWS_REGION: this.region,
       },
     });
 
-    // SQS Event Source for Processor Lambda
-    processorLambda.addEventSource(
-      new lambdaEventSources.SqsEventSource(processingQueue, {
-        batchSize: 1, // Process one essay at a time
-        maxBatchingWindow: cdk.Duration.seconds(0),
-      })
-    );
+    // Fargate Service
+    const processorService = new ecs.FargateService(this, 'ProcessorService', {
+      cluster,
+      taskDefinition,
+      desiredCount: 1,
+      vpcSubnets: {
+        subnetType: ec2.SubnetType.PUBLIC,
+      },
+      assignPublicIp: true,
+      enableExecuteCommand: false,
+      circuitBreaker: {
+        enable: true,
+        rollback: true,
+      },
+      minHealthyPercent: 100,
+      maxHealthyPercent: 200,
+    });
+
+    // Auto Scaling
+    const scaling = processorService.autoScaleTaskCount({
+      minCapacity: 1,
+      maxCapacity: 2,
+    });
+
+    scaling.scaleOnCpuUtilization('CpuScaling', {
+      targetUtilizationPercent: 70,
+    });
 
     // ============================================
     // Epic 7: Aggregation Lambda
@@ -475,14 +530,8 @@ export class VocabRecommendationStack extends cdk.Stack {
       })
     );
 
-    // Grant Processor Lambda permission to send messages to EssayUpdateQueue
-    processorLambdaRole.addToPolicy(
-      new iam.PolicyStatement({
-        effect: iam.Effect.ALLOW,
-        actions: ['sqs:SendMessage'],
-        resources: [essayUpdateQueue.queueArn],
-      })
-    );
+    // Processor Task Role already has permission to send messages to EssayUpdateQueue
+    // (granted above via essayUpdateQueue.grantSendMessages(processorTaskRole))
 
     // ============================================
     // CloudWatch Observability (Epic 5)
@@ -521,19 +570,54 @@ export class VocabRecommendationStack extends cdk.Stack {
     });
     s3UploadLambdaErrorAlarm.addAlarmAction(new cloudwatchActions.SnsAction(alarmTopic));
 
-    // CloudWatch Alarm: Processor Lambda Errors
-    const processorLambdaErrorAlarm = new cloudwatch.Alarm(this, 'ProcessorLambdaErrorAlarm', {
-      alarmName: 'vincent-vocab-processor-lambda-errors',
-      alarmDescription: 'Alerts when Processor Lambda errors exceed threshold',
-      metric: processorLambda.metricErrors({
-        statistic: 'Sum',
+    // CloudWatch Alarm: ECS Service CPU Utilization
+    const processorCpuAlarm = new cloudwatch.Alarm(this, 'ProcessorCpuAlarm', {
+      alarmName: 'vincent-vocab-processor-cpu-high',
+      alarmDescription: 'Alerts when ECS processor service CPU exceeds 85%',
+      metric: processorService.metricCpuUtilization({
+        statistic: 'Average',
         period: cdk.Duration.minutes(5),
       }),
-      threshold: 3, // Alert if 3+ errors in 5 minutes (more critical)
+      threshold: 85,
       evaluationPeriods: 1,
       treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
     });
-    processorLambdaErrorAlarm.addAlarmAction(new cloudwatchActions.SnsAction(alarmTopic));
+    processorCpuAlarm.addAlarmAction(new cloudwatchActions.SnsAction(alarmTopic));
+
+    // CloudWatch Alarm: SQS Queue Depth
+    const sqsQueueDepthAlarm = new cloudwatch.Alarm(this, 'SqsQueueDepthAlarm', {
+      alarmName: 'vincent-vocab-processing-queue-depth',
+      alarmDescription: 'Alerts when processing queue has more than 10 messages',
+      metric: processingQueue.metricApproximateNumberOfMessagesVisible({
+        statistic: 'Average',
+        period: cdk.Duration.minutes(5),
+      }),
+      threshold: 10,
+      evaluationPeriods: 1,
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+    });
+    sqsQueueDepthAlarm.addAlarmAction(new cloudwatchActions.SnsAction(alarmTopic));
+
+    // CloudWatch Alarm: ECS Service Running Task Count
+    const processorTaskCountAlarm = new cloudwatch.Alarm(this, 'ProcessorTaskCountAlarm', {
+      alarmName: 'vincent-vocab-processor-task-count-zero',
+      alarmDescription: 'Alerts when ECS processor service has no running tasks',
+      metric: new cloudwatch.Metric({
+        namespace: 'AWS/ECS',
+        metricName: 'RunningTaskCount',
+        dimensionsMap: {
+          ServiceName: processorService.serviceName,
+          ClusterName: cluster.clusterName,
+        },
+        statistic: 'Average',
+        period: cdk.Duration.minutes(5),
+      }),
+      threshold: 1,
+      evaluationPeriods: 1,
+      comparisonOperator: cloudwatch.ComparisonOperator.LESS_THAN_THRESHOLD,
+      treatMissingData: cloudwatch.TreatMissingData.BREACHING,
+    });
+    processorTaskCountAlarm.addAlarmAction(new cloudwatchActions.SnsAction(alarmTopic));
 
     // CloudWatch Alarm: Dead Letter Queue Messages (Failed Processing)
     const dlqAlarm = new cloudwatch.Alarm(this, 'DLQAlarm', {
@@ -548,34 +632,6 @@ export class VocabRecommendationStack extends cdk.Stack {
       treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
     });
     dlqAlarm.addAlarmAction(new cloudwatchActions.SnsAction(alarmTopic));
-
-    // CloudWatch Alarm: Processor Lambda Throttles (Optional)
-    const processorLambdaThrottleAlarm = new cloudwatch.Alarm(this, 'ProcessorLambdaThrottleAlarm', {
-      alarmName: 'vincent-vocab-processor-lambda-throttles',
-      alarmDescription: 'Alerts when Processor Lambda is throttled',
-      metric: processorLambda.metricThrottles({
-        statistic: 'Sum',
-        period: cdk.Duration.minutes(5),
-      }),
-      threshold: 1, // Alert if any throttles
-      evaluationPeriods: 1,
-      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-    });
-    processorLambdaThrottleAlarm.addAlarmAction(new cloudwatchActions.SnsAction(alarmTopic));
-
-    // CloudWatch Alarm: Processor Lambda Duration (High Duration Warning)
-    const processorLambdaDurationAlarm = new cloudwatch.Alarm(this, 'ProcessorLambdaDurationAlarm', {
-      alarmName: 'vincent-vocab-processor-lambda-duration',
-      alarmDescription: 'Alerts when Processor Lambda duration is high (approaching timeout)',
-      metric: processorLambda.metricDuration({
-        statistic: 'Average',
-        period: cdk.Duration.minutes(5),
-      }),
-      threshold: 240000, // 4 minutes (80% of 5-minute timeout)
-      evaluationPeriods: 2, // Must exceed threshold for 2 periods
-      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-    });
-    processorLambdaDurationAlarm.addAlarmAction(new cloudwatchActions.SnsAction(alarmTopic));
 
     // CloudFormation Outputs
     new cdk.CfnOutput(this, 'EssaysBucketName', {
@@ -638,10 +694,10 @@ export class VocabRecommendationStack extends cdk.Stack {
       exportName: 'S3UploadLambdaRoleArn',
     });
 
-    new cdk.CfnOutput(this, 'ProcessorLambdaRoleArn', {
-      value: processorLambdaRole.roleArn,
-      description: 'IAM role ARN for processor Lambda',
-      exportName: 'ProcessorLambdaRoleArn',
+    new cdk.CfnOutput(this, 'ProcessorTaskRoleArn', {
+      value: processorTaskRole.roleArn,
+      description: 'IAM role ARN for processor ECS task',
+      exportName: 'ProcessorTaskRoleArn',
     });
 
     new cdk.CfnOutput(this, 'ApiUrl', {
@@ -650,10 +706,22 @@ export class VocabRecommendationStack extends cdk.Stack {
       exportName: 'ApiUrl',
     });
 
-    new cdk.CfnOutput(this, 'ProcessorLambdaArn', {
-      value: processorLambda.functionArn,
-      description: 'Processor Lambda function ARN',
-      exportName: 'ProcessorLambdaArn',
+    new cdk.CfnOutput(this, 'ProcessorClusterName', {
+      value: cluster.clusterName,
+      description: 'ECS cluster name for processor service',
+      exportName: 'ProcessorClusterName',
+    });
+
+    new cdk.CfnOutput(this, 'ProcessorServiceName', {
+      value: processorService.serviceName,
+      description: 'ECS service name for processor',
+      exportName: 'ProcessorServiceName',
+    });
+
+    new cdk.CfnOutput(this, 'ProcessorImageUri', {
+      value: processorImage.imageUri,
+      description: 'ECR image URI for processor container',
+      exportName: 'ProcessorImageUri',
     });
 
     new cdk.CfnOutput(this, 'AlarmTopicArn', {

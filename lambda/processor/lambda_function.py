@@ -15,13 +15,15 @@ logger.setLevel(logging.INFO)
 # Initialize AWS clients
 s3_client = boto3.client('s3')
 dynamodb = boto3.resource('dynamodb')
-# AWS_REGION is automatically set by Lambda runtime
+sqs_client = boto3.client('sqs')
 bedrock = boto3.client('bedrock-runtime')
 
 # Environment variables
 ESSAYS_BUCKET = os.environ['ESSAYS_BUCKET']
 METRICS_TABLE = os.environ['METRICS_TABLE']
+PROCESSING_QUEUE_URL = os.environ['PROCESSING_QUEUE_URL']
 BEDROCK_MODEL_ID = os.environ.get('BEDROCK_MODEL_ID', 'anthropic.claude-3-sonnet-20240229-v1:0')
+ESSAY_UPDATE_QUEUE_URL = os.environ.get('ESSAY_UPDATE_QUEUE_URL')
 
 # Load spaCy model (from container image)
 # Model is installed in the Docker image
@@ -306,157 +308,231 @@ def update_dynamodb(
     )
 
 
-def handler(event, context):
+# Global flag for graceful shutdown
+shutdown_requested = False
+
+
+def signal_handler(signum, frame):
+    """Handle SIGTERM for graceful shutdown"""
+    global shutdown_requested
+    logger.info("Received shutdown signal", extra={"signal": signum})
+    shutdown_requested = True
+
+
+def process_message(message):
     """
-    Process SQS messages containing essay processing requests.
-    Each message contains: {essay_id, file_key}
+    Process a single SQS message containing essay processing request.
+    Message body contains: {essay_id, file_key, teacher_id?, assignment_id?, student_id?}
     """
-    logger.info("Processor Lambda invoked", extra={
-        "record_count": len(event.get('Records', [])),
-        "request_id": context.aws_request_id if context else None,
+    receipt_handle = message['ReceiptHandle']
+    message_body = json.loads(message['Body'])
+    
+    essay_id = message_body['essay_id']
+    file_key = message_body['file_key']
+    teacher_id = message_body.get('teacher_id')
+    assignment_id = message_body.get('assignment_id')
+    student_id = message_body.get('student_id')
+    
+    logger.info("Processing started", extra={
+        "essay_id": essay_id,
+        "file_key": file_key,
+        "teacher_id": teacher_id,
+        "assignment_id": assignment_id,
+        "student_id": student_id,
+        "message_id": message.get('MessageId'),
     })
     
-    for record in event['Records']:
-        essay_id = None
+    try:
+        # Update status to 'processing'
+        update_dynamodb(
+            essay_id,
+            'processing',
+            None,
+            None,
+            teacher_id=teacher_id,
+            assignment_id=assignment_id,
+            student_id=student_id
+        )
+        logger.info("Status updated to processing", extra={"essay_id": essay_id})
+        
+        # Download essay from S3
+        essay_text = download_essay_from_s3(ESSAYS_BUCKET, file_key)
+        logger.info("Essay downloaded from S3", extra={
+            "essay_id": essay_id,
+            "text_length": len(essay_text),
+        })
+        
+        # Run spaCy analysis
+        analysis_result = run_spacy_analysis(essay_text)
+        metrics = {k: v for k, v in analysis_result.items() if k != 'doc'}
+        doc = analysis_result['doc']
+        
+        logger.info("spaCy analysis complete", extra={
+            "essay_id": essay_id,
+            "word_count": metrics['word_count'],
+            "unique_words": metrics['unique_words'],
+            "type_token_ratio": float(metrics['type_token_ratio']),
+        })
+        
+        # Select candidate words
+        candidates = select_candidate_words(doc, max_candidates=20)
+        logger.info("Candidate words selected", extra={
+            "essay_id": essay_id,
+            "candidate_count": len(candidates),
+        })
+        
+        # Evaluate each candidate with Bedrock
+        feedback = []
+        bedrock_errors = 0
+        for candidate in candidates:
+            word = candidate['word']
+            sentence = candidate['sentence']
+            
+            # Get surrounding context
+            context_start = max(0, essay_text.find(sentence) - 100)
+            context_end = min(len(essay_text), essay_text.find(sentence) + len(sentence) + 100)
+            essay_context = essay_text[context_start:context_end]
+            
+            evaluation = evaluate_word_with_bedrock(word, sentence, essay_context)
+            feedback.append(evaluation)
+            
+            if 'error' in evaluation.get('comment', '').lower():
+                bedrock_errors += 1
+            
+            logger.debug("Word evaluated", extra={
+                "essay_id": essay_id,
+                "word": word,
+                "correct": evaluation['correct'],
+            })
+        
+        if bedrock_errors > 0:
+            logger.warning("Some Bedrock evaluations had errors", extra={
+                "essay_id": essay_id,
+                "error_count": bedrock_errors,
+                "total_words": len(candidates),
+            })
+        
+        # Update DynamoDB with results
+        update_dynamodb(
+            essay_id,
+            'processed',
+            metrics,
+            feedback,
+            teacher_id=teacher_id,
+            assignment_id=assignment_id,
+            student_id=student_id
+        )
+        
+        # Send message to EssayUpdateQueue for aggregation (if assignment_id is present)
+        if ESSAY_UPDATE_QUEUE_URL and assignment_id and teacher_id:
+            try:
+                update_message_body = {
+                    'teacher_id': teacher_id,
+                    'assignment_id': assignment_id,
+                    'essay_id': essay_id,
+                }
+                # Include student_id if available (required for student metrics aggregation)
+                if student_id:
+                    update_message_body['student_id'] = student_id
+                
+                sqs_client.send_message(
+                    QueueUrl=ESSAY_UPDATE_QUEUE_URL,
+                    MessageBody=json.dumps(update_message_body)
+                )
+                logger.info("Sent message to EssayUpdateQueue", extra={
+                    "teacher_id": teacher_id,
+                    "assignment_id": assignment_id,
+                    "essay_id": essay_id,
+                    "student_id": student_id,
+                })
+            except Exception as e:
+                logger.warning("Failed to send message to EssayUpdateQueue", extra={
+                    "error": str(e),
+                })
+        
+        logger.info("Processing completed successfully", extra={
+            "essay_id": essay_id,
+            "metrics_computed": bool(metrics),
+            "feedback_count": len(feedback),
+        })
+        
+        # Delete message from queue after successful processing
+        sqs_client.delete_message(
+            QueueUrl=PROCESSING_QUEUE_URL,
+            ReceiptHandle=receipt_handle
+        )
+        logger.debug("Message deleted from queue", extra={"essay_id": essay_id})
+        
+    except Exception as e:
+        logger.error("Error processing message", extra={
+            "essay_id": essay_id or "unknown",
+            "error": str(e),
+            "error_type": type(e).__name__,
+        }, exc_info=True)
+        # Do not delete message on failure - let SQS visibility timeout handle retry/DLQ
+        raise
+
+
+def main():
+    """
+    Main worker loop that continuously polls SQS and processes messages.
+    """
+    import signal
+    
+    # Register signal handler for graceful shutdown
+    signal.signal(signal.SIGTERM, signal_handler)
+    signal.signal(signal.SIGINT, signal_handler)
+    
+    logger.info("Processor worker started", extra={
+        "queue_url": PROCESSING_QUEUE_URL,
+        "bucket": ESSAYS_BUCKET,
+        "table": METRICS_TABLE,
+    })
+    
+    while not shutdown_requested:
         try:
-            # Parse SQS message
-            message_body = json.loads(record['body'])
-            essay_id = message_body['essay_id']
-            file_key = message_body['file_key']
-            teacher_id = message_body.get('teacher_id')
-            assignment_id = message_body.get('assignment_id')
-            student_id = message_body.get('student_id')
-            
-            logger.info("Processing started", extra={
-                "essay_id": essay_id,
-                "file_key": file_key,
-                "teacher_id": teacher_id,
-                "assignment_id": assignment_id,
-                "student_id": student_id,
-                "message_id": record.get('messageId'),
-            })
-            
-            # Update status to 'processing'
-            update_dynamodb(
-                essay_id,
-                'processing',
-                None,
-                None,
-                teacher_id=teacher_id,
-                assignment_id=assignment_id,
-                student_id=student_id
-            )
-            logger.info("Status updated to processing", extra={"essay_id": essay_id})
-            
-            # Download essay from S3
-            essay_text = download_essay_from_s3(ESSAYS_BUCKET, file_key)
-            logger.info("Essay downloaded from S3", extra={
-                "essay_id": essay_id,
-                "text_length": len(essay_text),
-            })
-            
-            # Run spaCy analysis
-            analysis_result = run_spacy_analysis(essay_text)
-            metrics = {k: v for k, v in analysis_result.items() if k != 'doc'}
-            doc = analysis_result['doc']
-            
-            logger.info("spaCy analysis complete", extra={
-                "essay_id": essay_id,
-                "word_count": metrics['word_count'],
-                "unique_words": metrics['unique_words'],
-                "type_token_ratio": float(metrics['type_token_ratio']),
-            })
-            
-            # Select candidate words
-            candidates = select_candidate_words(doc, max_candidates=20)
-            logger.info("Candidate words selected", extra={
-                "essay_id": essay_id,
-                "candidate_count": len(candidates),
-            })
-            
-            # Evaluate each candidate with Bedrock
-            feedback = []
-            bedrock_errors = 0
-            for candidate in candidates:
-                word = candidate['word']
-                sentence = candidate['sentence']
-                
-                # Get surrounding context
-                context_start = max(0, essay_text.find(sentence) - 100)
-                context_end = min(len(essay_text), essay_text.find(sentence) + len(sentence) + 100)
-                essay_context = essay_text[context_start:context_end]
-                
-                evaluation = evaluate_word_with_bedrock(word, sentence, essay_context)
-                feedback.append(evaluation)
-                
-                if 'error' in evaluation.get('comment', '').lower():
-                    bedrock_errors += 1
-                
-                logger.debug("Word evaluated", extra={
-                    "essay_id": essay_id,
-                    "word": word,
-                    "correct": evaluation['correct'],
-                })
-            
-            if bedrock_errors > 0:
-                logger.warning("Some Bedrock evaluations had errors", extra={
-                    "essay_id": essay_id,
-                    "error_count": bedrock_errors,
-                    "total_words": len(candidates),
-                })
-            
-            # Update DynamoDB with results
-            update_dynamodb(
-                essay_id,
-                'processed',
-                metrics,
-                feedback,
-                teacher_id=teacher_id,
-                assignment_id=assignment_id,
-                student_id=student_id
+            # Long-poll SQS for messages
+            response = sqs_client.receive_message(
+                QueueUrl=PROCESSING_QUEUE_URL,
+                WaitTimeSeconds=20,  # Long polling
+                MaxNumberOfMessages=1,
+                VisibilityTimeout=300,  # 5 minutes - matches processing time
             )
             
-            # Send message to EssayUpdateQueue for aggregation (if assignment_id is present)
-            essay_update_queue_url = os.environ.get('ESSAY_UPDATE_QUEUE_URL')
-            if essay_update_queue_url and assignment_id and teacher_id:
+            messages = response.get('Messages', [])
+            
+            if not messages:
+                # No messages received, continue polling
+                continue
+            
+            # Process each message
+            for message in messages:
+                if shutdown_requested:
+                    logger.info("Shutdown requested, finishing current message")
+                    break
+                
                 try:
-                    sqs_client = boto3.client('sqs')
-                    sqs_client.send_message(
-                        QueueUrl=essay_update_queue_url,
-                        MessageBody=json.dumps({
-                            'teacher_id': teacher_id,
-                            'assignment_id': assignment_id,
-                            'essay_id': essay_id,
-                        })
-                    )
-                    logger.info("Sent message to EssayUpdateQueue", extra={
-                        "teacher_id": teacher_id,
-                        "assignment_id": assignment_id,
-                        "essay_id": essay_id,
-                    })
+                    process_message(message)
                 except Exception as e:
-                    logger.warning("Failed to send message to EssayUpdateQueue", extra={
+                    logger.error("Failed to process message", extra={
                         "error": str(e),
-                    })
-            logger.info("Processing completed successfully", extra={
-                "essay_id": essay_id,
-                "metrics_computed": bool(metrics),
-                "feedback_count": len(feedback),
-            })
+                        "error_type": type(e).__name__,
+                    }, exc_info=True)
+                    # Message will become visible again after visibility timeout
+                    # SQS will retry and eventually send to DLQ after maxReceiveCount
             
         except Exception as e:
-            logger.error("Error processing message", extra={
-                "essay_id": essay_id or "unknown",
+            logger.error("Error in main loop", extra={
                 "error": str(e),
                 "error_type": type(e).__name__,
             }, exc_info=True)
-            # Re-raise to trigger DLQ after retries
-            raise
+            # Continue polling even on errors
+            import time
+            time.sleep(5)  # Brief pause before retrying
     
-    logger.info("Processor Lambda completed", extra={"processed_count": len(event['Records'])})
-    
-    return {
-        'statusCode': 200,
-        'body': json.dumps('Processing complete')
-    }
+    logger.info("Processor worker shutting down")
+
+
+if __name__ == "__main__":
+    main()
 

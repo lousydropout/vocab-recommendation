@@ -52,7 +52,7 @@
 
 ### D-004: Docker Container for spaCy (Revised from D-002)
 **Date**: 2025-11-10  
-**Status**: Accepted  
+**Status**: Superseded by D-010  
 **Context**: Lambda layer size limit (250MB unzipped) exceeded by spaCy + model  
 **Decision**: Switch to Docker container image for Processor Lambda  
 **Rationale**:
@@ -63,6 +63,34 @@
 **Alternatives Considered**:
 - Lambda Layer: Size limit exceeded
 - Download model at runtime: Too slow for cold starts
+
+**Note**: This decision was superseded when Docker Lambda also exceeded the 250MB unzipped limit.
+
+---
+
+### D-010: ECS Fargate for Processing (Revised from D-004)
+**Date**: 2025-01-XX  
+**Status**: Accepted  
+**Context**: Docker-based Lambda exceeded 250MB unzipped package size limit (spaCy + model + dependencies)  
+**Decision**: Migrate Processor from Lambda to ECS Fargate worker service  
+**Rationale**:
+- ECS Fargate has no package size limits
+- Long-running worker can continuously poll SQS (more efficient than Lambda event-driven)
+- Same processing logic, no business logic changes
+- Auto-scaling based on CPU utilization (1-2 tasks)
+- Default VPC with public subnets (no NAT gateway needed)
+
+**Implementation Details**:
+- Worker continuously polls SQS with long-polling (20s wait time)
+- Graceful shutdown on SIGTERM
+- CloudWatch Logs integration
+- Same IAM permissions as Lambda (SQS, DynamoDB, S3, Bedrock)
+- Task resources: 2 vCPU, 4GB memory
+
+**Alternatives Considered**:
+- Docker Lambda: Still exceeds 250MB unzipped limit
+- EC2: More complex, requires instance management
+- Split model: Would require significant refactoring
 
 ---
 

@@ -14,9 +14,11 @@ This proof-of-concept demonstrates an automated pipeline that:
 
 - **API Layer**: API Gateway + Lambda (Python/FastAPI)
 - **Storage**: S3 (essay files) + DynamoDB (status and results)
-- **Processing**: Lambda (Python) with spaCy + Bedrock
+- **Processing**: ECS Fargate (Python) with spaCy + Bedrock - Worker service polls SQS
 - **Queue**: SQS for async processing
 - **Infrastructure**: AWS CDK (TypeScript)
+
+**Processing Pipeline**: `S3 → SQS → ECS Fargate Worker → DynamoDB`
 
 See [`memory-bank/architecture.md`](memory-bank/architecture.md) for detailed architecture documentation.
 
@@ -145,7 +147,7 @@ See [`memory-bank/api-spec.md`](memory-bank/api-spec.md) for detailed API docume
   - 6/6 API integration tests passing
   - API URL: `https://m18eg6bei9.execute-api.us-east-1.amazonaws.com/prod/`
 - [x] Epic 3: Processing Pipeline (spaCy + Bedrock) ✅ **COMPLETE**
-  - Processor Lambda deployed as Docker container
+  - Processor ECS Fargate worker service (migrated from Lambda due to 250MB size limit)
   - spaCy NLP analysis and Bedrock LLM integration working
   - End-to-end processing test passing (~37s processing time)
   - All bugs fixed (DynamoDB compatibility)

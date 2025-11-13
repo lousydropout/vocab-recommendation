@@ -18,11 +18,10 @@ vocab_recommendation/
 │   ├── s3_upload_trigger/               # ✅ Epic 2
 │   │   ├── lambda_function.py
 │   │   └── requirements.txt
-│   └── processor/                       # ✅ Epic 3
-│       ├── lambda_function.py
-│       ├── processor.py
+│   └── processor/                       # ✅ Epic 3 (Migrated to ECS Fargate)
+│       ├── lambda_function.py          # ECS worker (long-running SQS poller)
 │       ├── requirements.txt
-│       └── Dockerfile                   # Docker container for spaCy
+│       └── Dockerfile                   # Docker container for ECS (python:3.12-slim)
 ├── frontend/                             # ✅ Epic 4
 │   ├── src/
 │   │   ├── components/ui/               # shadcn/ui components
@@ -41,30 +40,44 @@ vocab_recommendation/
 
 ## Key Implementation Details
 
-### Docker Container for spaCy (Processor Lambda)
+### ECS Fargate Worker Service (Processor - Migrated from Lambda)
 
-**Decision**: Switched from Lambda layer to Docker container due to size limits (spaCy + model > 250MB unzipped limit).
+**Decision**: Migrated from Docker-based Lambda to ECS Fargate due to 250MB unzipped package size limit (spaCy + model exceeds Lambda limits).
+
+**Architecture**:
+- ECS Fargate service with 1-2 tasks (auto-scaling based on CPU)
+- Default VPC with public subnets, public IP assignment
+- Long-running worker that continuously polls SQS queue
+- Same processing logic as Lambda version (no business logic changes)
 
 1. Dockerfile structure:
    ```dockerfile
-   FROM public.ecr.aws/lambda/python:3.12
-   RUN pip install --no-cache-dir spacy && \
-       python -m spacy download en_core_web_sm
-   COPY lambda_function.py requirements.txt /var/task/
-   RUN pip install --no-cache-dir -r requirements.txt -t /var/task
-   CMD ["lambda_function.handler"]
+   FROM python:3.12-slim
+   WORKDIR /app
+   RUN apt-get update && apt-get install -y --no-install-recommends build-essential
+   COPY requirements.txt .
+   RUN pip install --no-cache-dir -r requirements.txt
+   RUN pip install --no-cache-dir https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.7.1/en_core_web_sm-3.7.1-py3-none-any.whl
+   COPY lambda_function.py .
+   CMD ["python", "-u", "lambda_function.py"]
    ```
 
 2. CDK deployment:
-   - CDK automatically builds and pushes Docker image to ECR
-   - Uses `lambda.DockerImageCode.fromImageAsset()`
-   - Image is built during `cdk deploy`
+   - Uses `ecr_assets.DockerImageAsset` to build and push to ECR
+   - ECS Cluster in default VPC with public subnets
+   - Fargate Task Definition: 2 vCPU, 4GB memory
+   - Auto-scaling: 1-2 tasks, 70% CPU target
+   - CloudWatch Logs: `/ecs/vocab-processor`
 
-3. In Lambda code:
-   ```python
-   import spacy
-   nlp = spacy.load("en_core_web_sm")  # Model pre-installed in container
-   ```
+3. Worker code:
+   - `main()` function with infinite loop
+   - Long-polls SQS with 20-second wait time
+   - Processes messages, deletes after success
+   - Graceful shutdown on SIGTERM
+   - Same helper functions as Lambda version
+
+4. IAM Permissions:
+   - Task role: SQS (receive/delete), DynamoDB (read/write), S3 (read), Bedrock (invoke)
 
 ### Bedrock Integration
 
@@ -94,7 +107,7 @@ vocab_recommendation/
    - For zip files: Extracts all .txt/.md files from zip
    - For each essay: Extracts student name, matches/creates student, generates new `essay_id`
    - Lambda sends SQS message per essay with `teacher_id`, `assignment_id`, `student_id`
-   - Processor Lambda consumes from SQS and stores metadata
+   - ECS Fargate worker consumes from SQS and stores metadata
 
 **Bug Fix (2025-11-11):**
 - Legacy essays were incorrectly calling `process_single_essay()` which generated new `essay_id` and tried to re-upload
@@ -108,10 +121,21 @@ vocab_recommendation/
 - **Important**: Convert float values to Decimal before storing (DynamoDB doesn't support Python floats)
 - **Important**: Use ExpressionAttributeNames for reserved keywords ("metrics", "feedback", "status", etc.)
 
+### Lambda Bundling (ApiLambda, S3UploadLambda)
+
+**Issue**: Local `venv/` directories were being included in Lambda bundles, causing deployment failures.
+
+**Solution**:
+- Updated bundling commands to explicitly copy only necessary files
+- Added `exclude` patterns: `venv`, `__pycache__`, `tests`, `*.pyc`, `*.pyo`
+- Created `.dockerignore` files as additional safeguard
+- ApiLambda: Copies only `app/`, `lambda_function.py`, `main.py`, `pytest.ini`
+- S3UploadLambda: Copies only Python source files, excludes tests
+
 ### Error Handling
 
 - **SQS DLQ**: Failed messages after 3 retries
-- **Lambda Timeouts**: Processor Lambda set to 5 minutes
+- **ECS Worker**: Long-running process, handles errors gracefully, continues polling
 - **Bedrock Errors**: Graceful fallback, log errors
 - **spaCy Errors**: Validate input text before processing
 
@@ -133,7 +157,8 @@ vocab_recommendation/
 7. ✅ Configure Python dependency bundling in CDK
 
 ### Epic 3: Processing ✅
-1. ✅ Create processor Lambda (Docker container with spaCy)
+1. ✅ Migrated processor from Lambda to ECS Fargate (due to 250MB size limit)
+2. ✅ Created ECS Fargate worker service with SQS polling
 2. ✅ Test Bedrock integration (Claude 3 Sonnet)
 3. ✅ Monitor CloudWatch logs
 4. ✅ Fix DynamoDB compatibility issues (float/Decimal, reserved keywords)

@@ -17,11 +17,13 @@ The Vocabulary Essay Analyzer PoC is a serverless AWS application that processes
    - Triggered by S3 event notification
    - Pushes message to SQS queue
    
-3. SQS Message → Processor Lambda
+3. SQS Message → ECS Fargate Worker Service
+   - Worker continuously polls SQS queue (long-polling)
    - Downloads essay from S3
    - Runs spaCy analysis (lexical metrics)
    - Calls Bedrock (Claude 3) for word-level feedback
    - Updates DynamoDB with results (status: processed)
+   - Deletes message from queue after successful processing
    
 4. Client → GET /essay/{essay_id} → API Lambda
    - Queries DynamoDB
@@ -41,7 +43,7 @@ API Lambda
    ↳ DynamoDB (Teachers, Students, Assignments, EssayMetrics)
    ↳ S3 Uploads (Batch Essay)
    ↳ SQS Queue (Processor)
-Processor Lambda
+ECS Fargate Worker Service
    ↳ Updates EssayMetrics + Aggregation Lambdas
 Aggregation Lambdas
    ↳ ClassMetrics / StudentMetrics tables
@@ -57,7 +59,7 @@ Frontend Dashboards (React)
 | API Layer | API Gateway + Lambda (Python/FastAPI) | Handle HTTP requests |
 | Storage | S3 | Store essay files |
 | Queue | SQS | Async processing trigger |
-| Processing | Lambda (Python) | spaCy + Bedrock analysis |
+| Processing | ECS Fargate (Python Worker) | spaCy + Bedrock analysis (migrated from Lambda due to 250MB size limit) |
 | Database | DynamoDB | Store essay status and results |
 | NLP Model | Docker Container | spaCy + en_core_web_sm |
 | LLM | Bedrock (Claude 3) | Word-level evaluation |
@@ -87,9 +89,10 @@ Frontend Dashboards (React)
 
 ## Key Design Decisions
 
-1. **Lambda Layers for spaCy**: Reduces deployment package size, enables reuse
-2. **SQS for async processing**: Decouples API from processing, enables retry logic
+1. **ECS Fargate for Processing**: Migrated from Lambda due to 250MB unzipped package size limit (spaCy + model exceeds Lambda limits)
+2. **SQS for async processing**: Decouples API from processing, enables retry logic, worker polls queue continuously
 3. **DynamoDB for state**: Fast lookups, serverless scaling
 4. **Presigned URLs**: Allows direct client-to-S3 upload, reduces Lambda costs
-5. **Python for Lambdas**: Better NLP library support (spaCy)
+5. **Python for processing**: Better NLP library support (spaCy)
+6. **Default VPC with Public Subnets**: ECS tasks use public IPs to access AWS services (Bedrock, S3, DynamoDB, SQS) without NAT gateway
 

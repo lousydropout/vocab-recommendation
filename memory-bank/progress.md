@@ -65,38 +65,43 @@
 
 ### ✅ Epic 3: Processing Pipeline (spaCy + Bedrock) - COMPLETE
 
-**Completed:** 2025-11-11
+**Completed:** 2025-11-11 (Initial), 2025-01-XX (Migrated to ECS Fargate)
 
 **Summary:**
-- Processor Lambda deployed as Docker container image
+- **Migrated from Processor Lambda to ECS Fargate** due to 250MB unzipped package size limit
+- ECS Fargate worker service continuously polls SQS queue
 - spaCy NLP analysis fully implemented
 - Bedrock LLM integration working
-- SQS event source configured
 - End-to-end processing pipeline deployed and tested
 - All bugs fixed and validated
 
 **Resources Deployed:**
-- Processor Lambda: `vincent-vocab-processor-lambda` (Docker container with spaCy 3.8.8 and en_core_web_sm model)
-- SQS Event Source: Processor Lambda triggered by `vincent-vocab-essay-processing-queue`
-- CloudWatch Log Group: ProcessorLambda/LogGroup
-- ECR Repository: CDK-managed container assets repository
+- **ECS Fargate Service**: `vincent-vocab-processor-cluster` / `ProcessorService`
+  - Task Definition: 2 vCPU, 4GB memory
+  - Auto-scaling: 1-2 tasks (70% CPU target)
+  - Default VPC with public subnets, public IP assignment
+- **SQS Queue**: Worker continuously polls `vincent-vocab-essay-processing-queue` (long-polling, 20s wait)
+- **CloudWatch Log Group**: `/ecs/vocab-processor` (30-day retention)
+- **ECR Repository**: CDK-managed container assets repository
+- **IAM Task Role**: `vincent-vocab-processor-task-role` (SQS, DynamoDB, S3, Bedrock permissions)
 
 **Key Achievements:**
-- Switched from Lambda layer to Docker container due to size limits (spaCy + model > 250MB)
+- **Migration**: Successfully migrated from Docker-based Lambda to ECS Fargate worker service
 - Implemented comprehensive lexical metrics (word count, unique words, type-token ratio, POS distribution)
 - Candidate word selection logic for LLM evaluation (up to 20 words per essay)
 - Bedrock integration with Claude 3 Sonnet for word-level feedback
 - DynamoDB status updates (awaiting_processing → processing → processed)
-- Docker context issue resolved, deployment successful
+- Long-running worker with graceful shutdown (SIGTERM handling)
 - Fixed DynamoDB compatibility issues (float to Decimal conversion, reserved keywords)
-- Processor Lambda ARN: `arn:aws:lambda:us-east-1:971422717446:function:vincent-vocab-processor-lambda`
+- Fixed Lambda bundling issues (excluded venv/ from ApiLambda and S3UploadLambda bundles)
 
 **Technical Decisions:**
-- Used Docker container image instead of Lambda layer (size constraints)
-- Base image: `public.ecr.aws/lambda/python:3.12`
-- Memory: 3008 MB (for spaCy model loading)
-- Timeout: 5 minutes (matches SQS visibility timeout)
-- Batch size: 1 (process one essay at a time)
+- **ECS Fargate**: Migrated from Lambda due to 250MB unzipped package size limit (spaCy + model exceeds Lambda limits)
+- **Base image**: `python:3.12-slim` (standard Python image, not Lambda base)
+- **Resources**: 2 vCPU, 4GB memory (equivalent to Lambda's 3008MB with headroom)
+- **Networking**: Default VPC with public subnets, public IP (no NAT gateway needed)
+- **Polling**: Long-polling SQS with 20-second wait time, 5-minute visibility timeout
+- **Auto-scaling**: CPU-based scaling between 1-2 tasks
 - Float to Decimal conversion for DynamoDB compatibility
 - ExpressionAttributeNames for reserved keywords ("metrics", "feedback")
 
@@ -105,12 +110,14 @@
 2. **Reserved Keyword Error**: "metrics" and "feedback" are reserved keywords in DynamoDB. Fixed by using ExpressionAttributeNames in UpdateExpression.
 
 **Testing:**
-- Docker image build successful
-- CDK deployment successful
+- Docker image build successful (verified with `docker build`)
+- CDK synthesis successful (`cdk synth` passes)
+- CDK deployment successful (`cdk deploy` completes)
 - End-to-end integration test created (`test_processing.py`)
 - **All tests passing** ✅
 - Processing time: ~37 seconds for typical essay (85 words, 20 candidate words)
 - Validated: metrics calculation, Bedrock feedback generation, DynamoDB storage
+- ECS service running and processing messages successfully
 
 ---
 
