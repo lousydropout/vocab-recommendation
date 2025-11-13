@@ -245,7 +245,9 @@ function EssayReviewPage() {
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Type-Token Ratio</p>
-                <p className="text-2xl font-bold">{essay.metrics.type_token_ratio.toFixed(2)}</p>
+                <p className="text-2xl font-bold">{typeof essay.metrics.type_token_ratio === 'number' 
+                  ? essay.metrics.type_token_ratio.toFixed(2) 
+                  : parseFloat(String(essay.metrics.type_token_ratio || 0)).toFixed(2)}</p>
               </div>
               {essay.metrics.avg_word_freq_rank && (
                 <div>

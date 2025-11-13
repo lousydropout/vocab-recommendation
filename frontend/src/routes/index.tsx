@@ -1,7 +1,8 @@
-import { createFileRoute } from '@tanstack/react-router'
+import { createFileRoute, Link } from '@tanstack/react-router'
 import { requireAuth } from '../utils/route-protection'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
-import { BookOpen, Users } from 'lucide-react'
+import { Button } from '../components/ui/button'
+import { BookOpen, Users, ArrowRight } from 'lucide-react'
 
 export const Route = createFileRoute('/')({
   beforeLoad: async () => {
@@ -23,7 +24,7 @@ function Dashboard() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <Card>
+        <Card className="hover:shadow-lg transition-shadow">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <BookOpen className="h-5 w-5 text-blue-600" />
@@ -34,13 +35,19 @@ function Dashboard() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <p className="text-muted-foreground">
-              Assignment management will be implemented in Epic 5.
+            <p className="text-muted-foreground mb-4">
+              Create assignments, upload student essays, and review feedback. Track essay submissions and analyze vocabulary usage across all assignments.
             </p>
+            <Link to="/assignments">
+              <Button className="w-full">
+                Go to Assignments
+                <ArrowRight className="h-4 w-4 ml-2" />
+              </Button>
+            </Link>
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="hover:shadow-lg transition-shadow">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Users className="h-5 w-5 text-indigo-600" />
@@ -51,9 +58,15 @@ function Dashboard() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <p className="text-muted-foreground">
-              Student management will be implemented in Epic 4.
+            <p className="text-muted-foreground mb-4">
+              Manage student profiles, view performance metrics, and track vocabulary development over time. See detailed analytics for each student.
             </p>
+            <Link to="/students">
+              <Button className="w-full">
+                Go to Students
+                <ArrowRight className="h-4 w-4 ml-2" />
+              </Button>
+            </Link>
           </CardContent>
         </Card>
       </div>

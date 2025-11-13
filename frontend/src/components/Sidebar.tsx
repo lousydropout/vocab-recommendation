@@ -34,13 +34,13 @@ export default function Sidebar() {
       <header className="p-4 flex items-center bg-gray-800 text-white shadow-lg lg:hidden">
         <button
           onClick={() => setIsOpen(true)}
-          className="p-2 hover:bg-gray-700 rounded-lg transition-colors"
+          className="p-2 hover:bg-gray-700 rounded-lg transition-colors cursor-pointer"
           aria-label="Open menu"
         >
           <Menu size={24} />
         </button>
         <h1 className="ml-4 text-xl font-semibold">
-          <Link to="/">
+          <Link to="/" className="cursor-pointer">
             <span className="bg-gradient-to-r from-blue-400 to-indigo-400 bg-clip-text text-transparent">
               Vocabulary Analyzer
             </span>
@@ -51,7 +51,7 @@ export default function Sidebar() {
       {/* Desktop sidebar */}
       <aside className="hidden lg:flex lg:flex-col lg:w-64 lg:fixed lg:inset-y-0 lg:left-0 lg:z-40 bg-gray-900 text-white shadow-2xl">
         <div className="flex items-center justify-between p-4 border-b border-gray-700">
-          <Link to="/" className="flex items-center gap-2">
+          <Link to="/" className="flex items-center gap-2 cursor-pointer">
             <BarChart3 className="h-6 w-6 text-blue-400" />
             <span className="text-xl font-bold bg-gradient-to-r from-blue-400 to-indigo-400 bg-clip-text text-transparent">
               Vocabulary Analyzer
@@ -66,10 +66,10 @@ export default function Sidebar() {
               <Link
                 key={item.to}
                 to={item.to}
-                className="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-800 transition-colors mb-2"
+                className="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-800 transition-colors mb-2 cursor-pointer"
                 activeProps={{
                   className:
-                    'flex items-center gap-3 p-3 rounded-lg bg-blue-600 hover:bg-blue-700 transition-colors mb-2',
+                    'flex items-center gap-3 p-3 rounded-lg bg-blue-600 hover:bg-blue-700 transition-colors mb-2 cursor-pointer',
                 }}
               >
                 <Icon size={20} />
@@ -109,7 +109,7 @@ export default function Sidebar() {
           <h2 className="text-xl font-bold">Navigation</h2>
           <button
             onClick={() => setIsOpen(false)}
-            className="p-2 hover:bg-gray-800 rounded-lg transition-colors"
+            className="p-2 hover:bg-gray-800 rounded-lg transition-colors cursor-pointer"
             aria-label="Close menu"
           >
             <X size={24} />
@@ -124,10 +124,10 @@ export default function Sidebar() {
                 key={item.to}
                 to={item.to}
                 onClick={() => setIsOpen(false)}
-                className="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-800 transition-colors mb-2"
+                className="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-800 transition-colors mb-2 cursor-pointer"
                 activeProps={{
                   className:
-                    'flex items-center gap-3 p-3 rounded-lg bg-blue-600 hover:bg-blue-700 transition-colors mb-2',
+                    'flex items-center gap-3 p-3 rounded-lg bg-blue-600 hover:bg-blue-700 transition-colors mb-2 cursor-pointer',
                 }}
               >
                 <Icon size={20} />

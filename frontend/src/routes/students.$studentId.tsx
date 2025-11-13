@@ -54,12 +54,22 @@ function StudentDetailPage() {
     }
   }
 
+  // Helper function to safely convert to number
+  const toNumber = (value: any): number => {
+    if (typeof value === 'number') return value
+    if (typeof value === 'string') {
+      const parsed = parseFloat(value)
+      return isNaN(parsed) ? 0 : parsed
+    }
+    return 0
+  }
+
   // Mock time-series data (in production, this would come from the API)
   // For now, we'll show a simple representation based on current metrics
   const timeSeriesData = metrics ? [
-    { date: 'Week 1', ttr: metrics.stats.avg_ttr * 0.9, wordCount: metrics.stats.avg_word_count * 0.9 },
-    { date: 'Week 2', ttr: metrics.stats.avg_ttr * 0.95, wordCount: metrics.stats.avg_word_count * 0.95 },
-    { date: 'Week 3', ttr: metrics.stats.avg_ttr, wordCount: metrics.stats.avg_word_count },
+    { date: 'Week 1', ttr: toNumber(metrics.stats.avg_ttr) * 0.9, wordCount: toNumber(metrics.stats.avg_word_count) * 0.9 },
+    { date: 'Week 2', ttr: toNumber(metrics.stats.avg_ttr) * 0.95, wordCount: toNumber(metrics.stats.avg_word_count) * 0.95 },
+    { date: 'Week 3', ttr: toNumber(metrics.stats.avg_ttr), wordCount: toNumber(metrics.stats.avg_word_count) },
   ] : []
 
   if (studentLoading) {
@@ -137,7 +147,7 @@ function StudentDetailPage() {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">Avg Type-Token Ratio</p>
-                    <p className="text-3xl font-bold">{metrics.stats.avg_ttr.toFixed(2)}</p>
+                    <p className="text-3xl font-bold">{toNumber(metrics.stats.avg_ttr).toFixed(2)}</p>
                   </div>
                   <TrendingUp className="h-10 w-10 text-green-600 opacity-60" />
                 </div>
@@ -148,7 +158,7 @@ function StudentDetailPage() {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">Avg Word Count</p>
-                    <p className="text-3xl font-bold">{Math.round(metrics.stats.avg_word_count)}</p>
+                    <p className="text-3xl font-bold">{Math.round(toNumber(metrics.stats.avg_word_count))}</p>
                   </div>
                   <FileText className="h-10 w-10 text-purple-600 opacity-60" />
                 </div>
@@ -226,7 +236,7 @@ function StudentDetailPage() {
                 <CardDescription>Frequency rank (lower = more common)</CardDescription>
               </CardHeader>
               <CardContent>
-                <p className="text-4xl font-bold">{Math.round(metrics.stats.avg_freq_rank)}</p>
+                <p className="text-4xl font-bold">{Math.round(toNumber(metrics.stats.avg_freq_rank))}</p>
               </CardContent>
             </Card>
           </div>

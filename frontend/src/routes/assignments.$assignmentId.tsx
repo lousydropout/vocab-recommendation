@@ -1,8 +1,8 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { requireAuth } from '../utils/route-protection'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { getAssignment, getClassMetrics, getAssignmentUploadUrl } from '../api/client'
-import type { AssignmentResponse } from '../types/api'
+import { getAssignment, getClassMetrics, getAssignmentUploadUrl, listStudents, getStudentMetrics } from '../api/client'
+import type { AssignmentResponse, StudentResponse, StudentMetricsResponse } from '../types/api'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
 import { Button } from '../components/ui/button'
 import { Alert, AlertDescription } from '../components/ui/alert'
@@ -10,6 +10,16 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
 import { ArrowLeft, Loader2, AlertCircle, Upload, BarChart3, Users, TrendingUp, CheckCircle2 } from 'lucide-react'
 import { useState, useCallback, useEffect } from 'react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
+
+// Helper function to safely convert to number
+function toNumber(value: any): number {
+  if (typeof value === 'number') return value
+  if (typeof value === 'string') {
+    const parsed = parseFloat(value)
+    return isNaN(parsed) ? 0 : parsed
+  }
+  return 0
+}
 
 export const Route = createFileRoute('/assignments/$assignmentId')({
   beforeLoad: async () => {
@@ -77,11 +87,18 @@ function AssignmentDetailPage() {
     refetchInterval: (query) => {
       // Auto-refresh metrics every 10 seconds if we have essays but they might still be processing
       const data = query.state.data as typeof metrics
-      if (data && data.stats && data.stats.essay_count > 0) {
+      if (data && data.stats && toNumber(data.stats.essay_count) > 0) {
         return 10000 // 10 seconds
       }
       return false
     },
+  })
+
+  // Fetch students to show individual results
+  const { data: students, isLoading: studentsLoading } = useQuery<StudentResponse[]>({
+    queryKey: ['students'],
+    queryFn: () => listStudents(),
+    enabled: !!metrics && toNumber(metrics.stats.essay_count) > 0,
   })
   
   // Save uploaded files to localStorage whenever they change
@@ -240,23 +257,92 @@ function AssignmentDetailPage() {
     )
   }
 
+  // Component to render a student row with their metrics
+  function StudentRow({ student }: { student: StudentResponse }) {
+    const { data: studentMetrics, isLoading } = useQuery<StudentMetricsResponse>({
+      queryKey: ['student-metrics', student.student_id],
+      queryFn: () => getStudentMetrics(student.student_id),
+      enabled: !!student.student_id,
+    })
+
+    const handleStudentClick = () => {
+      navigate({ 
+        to: '/students/$studentId',
+        params: { studentId: student.student_id }
+      })
+    }
+
+    if (isLoading) {
+      return (
+        <tr className="border-b">
+          <td className="p-3">
+            <button
+              onClick={handleStudentClick}
+              className="text-left font-medium text-blue-600 hover:text-blue-800 hover:underline cursor-pointer"
+            >
+              {student.name}
+            </button>
+          </td>
+          <td colSpan={4} className="p-3 text-center">
+            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground inline" />
+          </td>
+        </tr>
+      )
+    }
+
+    if (!studentMetrics || toNumber(studentMetrics.stats.total_essays) === 0) {
+      return (
+        <tr className="border-b">
+          <td className="p-3">
+            <button
+              onClick={handleStudentClick}
+              className="text-left font-medium text-blue-600 hover:text-blue-800 hover:underline cursor-pointer"
+            >
+              {student.name}
+            </button>
+          </td>
+          <td colSpan={4} className="p-3 text-center text-muted-foreground text-sm">
+            No essays submitted
+          </td>
+        </tr>
+      )
+    }
+
+    return (
+      <tr className="border-b hover:bg-gray-50">
+        <td className="p-3">
+          <button
+            onClick={handleStudentClick}
+            className="text-left font-medium text-blue-600 hover:text-blue-800 hover:underline cursor-pointer"
+          >
+            {student.name}
+          </button>
+        </td>
+        <td className="p-3 text-right">{toNumber(studentMetrics.stats.total_essays)}</td>
+        <td className="p-3 text-right">{toNumber(studentMetrics.stats.avg_ttr).toFixed(2)}</td>
+        <td className="p-3 text-right">{Math.round(toNumber(studentMetrics.stats.avg_word_count))}</td>
+        <td className="p-3 text-right">{Math.round(toNumber(studentMetrics.stats.avg_freq_rank))}</td>
+      </tr>
+    )
+  }
+
   // Prepare chart data (with defensive checks)
   const correctnessData = metrics?.stats?.correctness ? [
-    { name: 'Correct', value: metrics.stats.correctness.correct || 0, color: '#10b981' },
-    { name: 'Incorrect', value: metrics.stats.correctness.incorrect || 0, color: '#ef4444' },
+    { name: 'Correct', value: toNumber(metrics.stats.correctness.correct), color: '#10b981' },
+    { name: 'Incorrect', value: toNumber(metrics.stats.correctness.incorrect), color: '#ef4444' },
   ] : []
 
   const avgTtrData = metrics?.stats?.avg_ttr !== undefined ? [
-    { name: 'Average TTR', value: metrics.stats.avg_ttr },
+    { name: 'Average TTR', value: toNumber(metrics.stats.avg_ttr) },
   ] : []
 
   const avgFreqRankData = metrics?.stats?.avg_freq_rank !== undefined ? [
-    { name: 'Avg Word Difficulty', value: Math.round(metrics.stats.avg_freq_rank) },
+    { name: 'Avg Word Difficulty', value: Math.round(toNumber(metrics.stats.avg_freq_rank)) },
   ] : []
 
   const correctRate = metrics?.stats && metrics.stats.essay_count > 0 && metrics.stats.correctness
-    ? ((metrics.stats.correctness.correct / 
-        (metrics.stats.correctness.correct + metrics.stats.correctness.incorrect)) * 100).toFixed(1)
+    ? ((toNumber(metrics.stats.correctness.correct) / 
+        (toNumber(metrics.stats.correctness.correct) + toNumber(metrics.stats.correctness.incorrect))) * 100).toFixed(1)
     : '0.0'
 
   return (
@@ -413,7 +499,7 @@ function AssignmentDetailPage() {
                     <div className="flex items-center justify-between">
                       <div>
                         <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">Avg Type-Token Ratio</p>
-                        <p className="text-3xl font-bold">{metrics.stats.avg_ttr.toFixed(2)}</p>
+                        <p className="text-3xl font-bold">{toNumber(metrics.stats.avg_ttr).toFixed(2)}</p>
                       </div>
                       <TrendingUp className="h-10 w-10 text-green-600 opacity-60" />
                     </div>
@@ -424,7 +510,7 @@ function AssignmentDetailPage() {
                     <div className="flex items-center justify-between">
                       <div>
                         <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">Avg Word Difficulty</p>
-                        <p className="text-3xl font-bold">{Math.round(metrics.stats.avg_freq_rank)}</p>
+                        <p className="text-3xl font-bold">{Math.round(toNumber(metrics.stats.avg_freq_rank))}</p>
                       </div>
                       <BarChart3 className="h-10 w-10 text-purple-600 opacity-60" />
                     </div>
@@ -543,24 +629,55 @@ function AssignmentDetailPage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              {metrics && metrics.stats.essay_count > 0 ? (
+              {metricsLoading ? (
+                <div className="text-center py-8">
+                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground mx-auto mb-4" />
+                  <p className="text-muted-foreground">Loading metrics...</p>
+                </div>
+              ) : metrics && toNumber(metrics.stats.essay_count) > 0 ? (
                 <div className="space-y-4">
                   <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
                     <p className="text-sm font-medium text-green-900 mb-1">
-                      {metrics.stats.essay_count} essay{metrics.stats.essay_count !== 1 ? 's' : ''} processed
+                      {toNumber(metrics.stats.essay_count)} essay{toNumber(metrics.stats.essay_count) !== 1 ? 's' : ''} processed
                     </p>
                     <p className="text-xs text-green-700">
-                      Essays are being analyzed and metrics are being calculated. Individual student results will be displayed here once the API endpoint is available.
+                      Essays have been analyzed and metrics are available.
                     </p>
                   </div>
-                  <div className="text-center py-4">
-                    <p className="text-muted-foreground mb-2">
-                      Student results table will be displayed here once individual essay data is available.
-                    </p>
-                    <p className="text-sm text-muted-foreground">
-                      Currently showing aggregate metrics. Individual student breakdown coming soon.
-                    </p>
-                  </div>
+                  
+                  {studentsLoading ? (
+                    <div className="text-center py-4">
+                      <Loader2 className="h-6 w-6 animate-spin text-muted-foreground mx-auto mb-2" />
+                      <p className="text-sm text-muted-foreground">Loading student data...</p>
+                    </div>
+                  ) : students && students.length > 0 ? (
+                    <div className="space-y-4">
+                      <div className="overflow-x-auto">
+                        <table className="w-full border-collapse">
+                          <thead>
+                            <tr className="border-b">
+                              <th className="text-left p-3 font-semibold">Student</th>
+                              <th className="text-right p-3 font-semibold">Essays</th>
+                              <th className="text-right p-3 font-semibold">Avg TTR</th>
+                              <th className="text-right p-3 font-semibold">Avg Word Count</th>
+                              <th className="text-right p-3 font-semibold">Avg Difficulty</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {students.map((student) => (
+                              <StudentRow key={student.student_id} student={student} />
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-center py-4">
+                      <p className="text-muted-foreground">
+                        No students found. Students will appear here once they submit essays.
+                      </p>
+                    </div>
+                  )}
                 </div>
               ) : uploadedFiles.length > 0 ? (
                 <div className="text-center py-8">
