@@ -32,3 +32,8 @@ layer/
 
 # Test outputs
 *.log
+
+# E2E testing configuration and runtime files
+.e2e_config
+.jwt_token
+.submission_info
