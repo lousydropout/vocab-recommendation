@@ -5,8 +5,10 @@ import { getAssignment, getClassMetrics, getAssignmentUploadUrl } from '../api/c
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
 import { Button } from '../components/ui/button'
 import { Alert, AlertDescription } from '../components/ui/alert'
-import { ArrowLeft, Loader2, AlertCircle, Upload } from 'lucide-react'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
+import { ArrowLeft, Loader2, AlertCircle, Upload, BarChart3, Users, TrendingUp, CheckCircle2 } from 'lucide-react'
 import { useState, useCallback } from 'react'
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
 
 export const Route = createFileRoute('/assignments/$assignmentId')({
   beforeLoad: async () => {
@@ -138,6 +140,25 @@ function AssignmentDetailPage() {
     )
   }
 
+  // Prepare chart data
+  const correctnessData = metrics ? [
+    { name: 'Correct', value: metrics.stats.correctness.correct, color: '#10b981' },
+    { name: 'Incorrect', value: metrics.stats.correctness.incorrect, color: '#ef4444' },
+  ] : []
+
+  const avgTtrData = metrics ? [
+    { name: 'Average TTR', value: metrics.stats.avg_ttr },
+  ] : []
+
+  const avgFreqRankData = metrics ? [
+    { name: 'Avg Word Difficulty', value: Math.round(metrics.stats.avg_freq_rank) },
+  ] : []
+
+  const correctRate = metrics && metrics.stats.essay_count > 0
+    ? ((metrics.stats.correctness.correct / 
+        (metrics.stats.correctness.correct + metrics.stats.correctness.incorrect)) * 100).toFixed(1)
+    : '0.0'
+
   return (
     <div className="p-8">
       <div className="mb-8">
@@ -225,79 +246,192 @@ function AssignmentDetailPage() {
         </CardContent>
       </Card>
 
-      {/* Metrics Section */}
-      {metricsLoading ? (
-        <Card>
-          <CardContent className="py-12">
-            <div className="flex items-center justify-center">
-              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-            </div>
-          </CardContent>
-        </Card>
-      ) : metrics ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>Class Metrics</CardTitle>
-            <CardDescription>
-              Overall performance statistics for this assignment
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Total Essays</p>
-                <p className="text-2xl font-bold">{metrics.stats.essay_count}</p>
-              </div>
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Average TTR</p>
-                <p className="text-2xl font-bold">{metrics.stats.avg_ttr.toFixed(2)}</p>
-              </div>
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Avg Word Difficulty</p>
-                <p className="text-2xl font-bold">{Math.round(metrics.stats.avg_freq_rank)}</p>
-              </div>
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Correctness</p>
-                <p className="text-2xl font-bold">
-                  {metrics.stats.correctness.correct} / {metrics.stats.correctness.correct + metrics.stats.correctness.incorrect}
-                </p>
-              </div>
-            </div>
-            <p className="text-xs text-muted-foreground mt-4">
-              Last updated: {new Date(metrics.updated_at).toLocaleString()}
-            </p>
-          </CardContent>
-        </Card>
-      ) : (
-        <Card>
-          <CardHeader>
-            <CardTitle>Class Metrics</CardTitle>
-            <CardDescription>
-              Metrics will appear here once essays are processed
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <p className="text-muted-foreground">
-              Upload essays to see class-wide statistics and analytics.
-            </p>
-          </CardContent>
-        </Card>
-      )}
+      {/* Analytics Tabs */}
+      <Tabs defaultValue="overview" className="w-full">
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="students">By Student</TabsTrigger>
+        </TabsList>
 
-      {/* Student Results Table - Placeholder for Epic 6 */}
-      <Card className="mt-6">
-        <CardHeader>
-          <CardTitle>Student Results</CardTitle>
-          <CardDescription>
-            Individual student results will be displayed here (Epic 6)
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <p className="text-muted-foreground">
-            Student results table will be implemented in Epic 6: Class Analytics.
-          </p>
-        </CardContent>
-      </Card>
+        <TabsContent value="overview" className="space-y-6">
+          {metricsLoading ? (
+            <Card>
+              <CardContent className="py-12">
+                <div className="flex items-center justify-center">
+                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                </div>
+              </CardContent>
+            </Card>
+          ) : metrics ? (
+            <>
+              {/* Summary Stats */}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                <Card>
+                  <CardContent className="pt-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">Total Essays</p>
+                        <p className="text-3xl font-bold">{metrics.stats.essay_count}</p>
+                      </div>
+                      <Users className="h-10 w-10 text-blue-600 opacity-60" />
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="pt-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">Avg Type-Token Ratio</p>
+                        <p className="text-3xl font-bold">{metrics.stats.avg_ttr.toFixed(2)}</p>
+                      </div>
+                      <TrendingUp className="h-10 w-10 text-green-600 opacity-60" />
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="pt-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">Avg Word Difficulty</p>
+                        <p className="text-3xl font-bold">{Math.round(metrics.stats.avg_freq_rank)}</p>
+                      </div>
+                      <BarChart3 className="h-10 w-10 text-purple-600 opacity-60" />
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="pt-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">Correct Rate</p>
+                        <p className="text-3xl font-bold">{correctRate}%</p>
+                      </div>
+                      <CheckCircle2 className="h-10 w-10 text-green-600 opacity-60" />
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Charts */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Correctness Distribution Pie Chart */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-xl">Correctness Distribution</CardTitle>
+                    <CardDescription>Percentage of correct vs incorrect word usage</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <ResponsiveContainer width="100%" height={300}>
+                      <PieChart>
+                        <Pie
+                          data={correctnessData}
+                          cx="50%"
+                          cy="50%"
+                          labelLine={false}
+                          label={({ name, percent }) => `${name}: ${percent ? (percent * 100).toFixed(0) : 0}%`}
+                          outerRadius={80}
+                          fill="#8884d8"
+                          dataKey="value"
+                        >
+                          {correctnessData.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={entry.color} />
+                          ))}
+                        </Pie>
+                        <Tooltip />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </CardContent>
+                </Card>
+
+                {/* Average TTR Bar Chart */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-xl">Average Type-Token Ratio</CardTitle>
+                    <CardDescription>Lexical diversity measure (higher is better)</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <ResponsiveContainer width="100%" height={300}>
+                      <BarChart data={avgTtrData}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="name" />
+                        <YAxis domain={[0, 1]} />
+                        <Tooltip />
+                        <Bar dataKey="value" fill="#3b82f6" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Word Difficulty Chart */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-xl">Average Word Difficulty (Frequency Rank)</CardTitle>
+                  <CardDescription>Lower rank = more common words, Higher rank = more advanced vocabulary</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <BarChart data={avgFreqRankData}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="name" />
+                      <YAxis />
+                      <Tooltip />
+                      <Bar dataKey="value" fill="#8b5cf6" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+
+              <p className="text-xs text-muted-foreground text-center">
+                Last updated: {new Date(metrics.updated_at).toLocaleString()}
+              </p>
+            </>
+          ) : (
+            <Card>
+              <CardHeader>
+                <CardTitle>Class Metrics</CardTitle>
+                <CardDescription>
+                  Metrics will appear here once essays are processed
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <p className="text-muted-foreground">
+                  Upload essays to see class-wide statistics and analytics.
+                </p>
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
+
+        <TabsContent value="students" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Student Results</CardTitle>
+              <CardDescription>
+                Individual student performance for this assignment
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {metrics && metrics.stats.essay_count > 0 ? (
+                <div className="text-center py-8">
+                  <p className="text-muted-foreground mb-4">
+                    Student results table will be displayed here once individual essay data is available.
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    Currently showing aggregate metrics. Individual student breakdown coming soon.
+                  </p>
+                </div>
+              ) : (
+                <div className="text-center py-8">
+                  <p className="text-muted-foreground">
+                    No essays have been processed yet. Upload essays to see student results.
+                  </p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   )
 }
