@@ -312,27 +312,65 @@ def handler(event, context):
                         error_count += 1
                         continue
                     
-                    # Process essay
-                    message_body = process_single_essay(
-                        bucket=bucket,
-                        teacher_id=teacher_id,
-                        assignment_id=assignment_id,
-                        file_key=key,
-                        essay_text=essay_text,
-                    )
+                    # For assignment essays, the file is already in S3
+                    # Extract student name and get/create student
+                    student_id = None
+                    if teacher_id:
+                        try:
+                            student_name = extract_student_name_from_text(essay_text)
+                            if student_name:
+                                student = get_or_create_student(teacher_id, student_name)
+                                student_id = student['student_id']
+                                logger.info("Student resolved", extra={
+                                    "teacher_id": teacher_id,
+                                    "student_id": student_id,
+                                    "student_name": student_name,
+                                })
+                        except Exception as e:
+                            logger.error("Failed to get or create student", extra={
+                                "teacher_id": teacher_id,
+                                "error": str(e),
+                            })
+                            # Continue processing even if student creation fails
                     
-                    if message_body:
-                        # Send message to SQS
+                    # Generate essay_id
+                    import uuid
+                    essay_id = str(uuid.uuid4())
+                    
+                    # Create SQS message with existing file_key
+                    message_body = {
+                        'essay_id': essay_id,
+                        'file_key': key,  # Use the existing S3 key
+                        'bucket': bucket,
+                    }
+                    
+                    # Add assignment metadata
+                    if teacher_id:
+                        message_body['teacher_id'] = teacher_id
+                    if assignment_id:
+                        message_body['assignment_id'] = assignment_id
+                    if student_id:
+                        message_body['student_id'] = student_id
+                    
+                    # Send message to SQS
+                    try:
                         sqs.send_message(
                             QueueUrl=PROCESSING_QUEUE_URL,
                             MessageBody=json.dumps(message_body),
                         )
                         processed_count += 1
                         logger.info("Message sent to SQS", extra={
-                            "essay_id": message_body.get('essay_id'),
+                            "essay_id": essay_id,
                             "file_key": key,
+                            "teacher_id": teacher_id,
+                            "assignment_id": assignment_id,
+                            "student_id": student_id,
                         })
-                    else:
+                    except Exception as e:
+                        logger.error("Failed to send message to SQS", extra={
+                            "essay_id": essay_id,
+                            "error": str(e),
+                        }, exc_info=True)
                         error_count += 1
             
             else:

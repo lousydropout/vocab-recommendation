@@ -86,6 +86,28 @@ vocab_recommendation/
 - **IAM Permissions**: `bedrock:InvokeModel` on model ARN
 - **API Format**: Bedrock Runtime API with Anthropic message format
 
+### Student Metrics Aggregation
+
+**Flow:**
+1. Processor Lambda processes essay and updates DynamoDB
+2. Processor Lambda sends message to `EssayUpdateQueue` with:
+   - `teacher_id`, `assignment_id`, `essay_id`, `student_id` (required for student metrics)
+3. Aggregation Lambda (`student_metrics.py`) consumes from `EssayUpdateQueue`
+4. Aggregation Lambda queries all essays for the student (scan with filter)
+5. Aggregation Lambda computes rolling averages:
+   - `avg_ttr`: Average type-token ratio
+   - `avg_word_count`: Average word count
+   - `avg_unique_words`: Average unique words
+   - `avg_freq_rank`: Average word frequency rank
+   - `total_essays`: Total processed essays
+   - `trend`: improving/stable/declining (based on last 6 essays)
+6. Aggregation Lambda updates `StudentMetrics` table
+
+**Critical Fix (2025-11-13):**
+- Processor Lambda must include `student_id` in EssayUpdateQueue messages
+- Without `student_id`, aggregation Lambda cannot process student metrics
+- Fixed in `lambda/processor/lambda_function.py` lines 655-657
+
 ### S3 Event Flow
 
 **Two Processing Flows:**
@@ -98,16 +120,23 @@ vocab_recommendation/
    - Lambda sends message to SQS queue with existing `essay_id`
    - Processor Lambda consumes from SQS
 
-2. **Assignment Flow** (`{teacher_id}/assignments/{assignment_id}/...`):
+2. **Assignment Flow** (`{teacher_id}/assignments/{assignment_id}/{file_name}`):
    - Client gets presigned URL via `POST /assignments/{id}/upload-url`
-   - Client uploads file (single .txt/.md or .zip) to S3
-   - S3 key: `{teacher_id}/assignments/{assignment_id}/{file_name}`
+   - Client uploads directly to S3 using presigned URL
    - S3 triggers Lambda on `ObjectCreated` event
-   - Lambda extracts `teacher_id` and `assignment_id` from S3 key path
-   - For zip files: Extracts all .txt/.md files from zip
-   - For each essay: Extracts student name, matches/creates student, generates new `essay_id`
-   - Lambda sends SQS message per essay with `teacher_id`, `assignment_id`, `student_id`
-   - ECS Fargate worker consumes from SQS and stores metadata
+   - Lambda downloads essay text from S3
+   - Lambda extracts student name from essay text
+   - Lambda creates/updates student record
+   - Lambda generates new `essay_id` and sends SQS message with:
+     - `essay_id`: New UUID
+     - `file_key`: Existing S3 key (no re-upload)
+     - `teacher_id`, `assignment_id`, `student_id`: Metadata
+   - Processor Lambda consumes from SQS
+
+**Bug Fix (2025-11-13):**
+- Fixed assignment flow to use existing S3 files instead of attempting re-upload
+- Assignment essays now correctly send SQS messages with existing `file_key`
+- Processor Lambda includes `student_id` in EssayUpdateQueue messages for aggregation
 
 **Bug Fix (2025-11-11):**
 - Legacy essays were incorrectly calling `process_single_essay()` which generated new `essay_id` and tried to re-upload
@@ -392,6 +421,39 @@ All resource names and ARNs are exported as CloudFormation outputs for easy refe
   - `test_assignment_flow.py`: Passing
   - `test_api.py`: 1/6 passing (expected - requires auth token)
 - Test script: `test_api.py` for API endpoint validation
+
+### Backend-Only E2E Testing
+
+**Created:** 2025-11-13
+
+**Purpose:** Complete backend testing workflow without frontend dependency
+
+**Files:**
+- `BACKEND_E2E_TEST_GUIDE.md`: Step-by-step guide with AWS CLI and curl commands
+- `submit_essays.sh`: Automated script to submit essays from `data/` directory
+- `.e2e_config.example`: Configuration template
+- `trigger_student_aggregation.sh`: Manual trigger for student metrics aggregation
+
+**Workflow:**
+1. Authenticate with Cognito (AWS CLI)
+2. Create assignment (API)
+3. Create students (API)
+4. Get presigned URL (API)
+5. Upload essay to S3 (curl)
+6. Monitor S3 trigger Lambda (CloudWatch logs)
+7. Verify SQS message (AWS CLI)
+8. Monitor processor Lambda (CloudWatch logs)
+9. Verify DynamoDB entry (AWS CLI)
+10. Get essay result (API)
+11. Get class metrics (API)
+12. Get student metrics (API)
+13. Optional: Test override functionality (API)
+
+**Validation:**
+- ✅ Complete pipeline tested end-to-end
+- ✅ Sam Williams metrics: 1 essay, avg_ttr: 1.0, avg_word_count: 86
+- ✅ Alex Johnson metrics: 2 essays, avg_ttr: 0.877, avg_word_count: 71
+- ✅ Class metrics: 3 essays, avg_ttr: 0.918, correctness: 93.3%
 
 ## Epic 6 Implementation Details (Authentication & Teacher Management)
 

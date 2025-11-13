@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from '@tanstack/react-router'
+import { createFileRoute, useNavigate, Outlet, useLocation } from '@tanstack/react-router'
 import { requireAuth } from '../utils/route-protection'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
@@ -30,11 +30,15 @@ export const Route = createFileRoute('/students')({
 
 function StudentsPage() {
   const navigate = useNavigate()
+  const location = useLocation()
   const queryClient = useQueryClient()
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingStudent, setEditingStudent] = useState<StudentResponse | null>(null)
   const [deleteConfirm, setDeleteConfirm] = useState<StudentResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
+  
+  // Check if we're on a child route (student detail)
+  const isDetailPage = location.pathname !== '/students'
 
   // Fetch students
   const { data: students = [], isLoading } = useQuery({
@@ -121,6 +125,12 @@ function StudentsPage() {
     }
   }
 
+  // If we're on a detail page, just render the outlet (child route)
+  if (isDetailPage) {
+    return <Outlet />
+  }
+
+  // Otherwise, render the students list
   return (
     <div className="p-8">
       <div className="mb-8 flex justify-between items-center">
@@ -190,7 +200,10 @@ function StudentsPage() {
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => navigate({ to: `/students/${student.student_id}` })}
+                          onClick={() => navigate({ 
+                            to: '/students/$studentId',
+                            params: { studentId: student.student_id }
+                          })}
                         >
                           <User className="h-4 w-4 mr-1" />
                           View

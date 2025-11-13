@@ -65,7 +65,7 @@
 
 ### ✅ Epic 3: Processing Pipeline (spaCy + Bedrock) - COMPLETE
 
-**Completed:** 2025-11-11 (Initial), 2025-01-XX (Migrated to ECS Fargate)
+**Completed:** 2025-11-11 (Initial), 2025-01-XX (Migrated to ECS Fargate), 2025-11-13 (Bug Fixes)
 
 **Summary:**
 - **Migrated from Processor Lambda to ECS Fargate** due to 250MB unzipped package size limit
@@ -74,6 +74,11 @@
 - Bedrock LLM integration working
 - End-to-end processing pipeline deployed and tested
 - All bugs fixed and validated
+
+**Critical Bug Fixes (2025-11-13):**
+1. **Processor Lambda missing student_id in aggregation messages**: Fixed processor to include `student_id` in EssayUpdateQueue messages, enabling student metrics aggregation
+2. **S3 trigger re-uploading essays**: Fixed S3 trigger to use existing files instead of attempting to re-upload essays that are already in S3
+3. **Missing handler function**: Added `handler()` function to processor Lambda for SQS event source compatibility (supports both Lambda event-driven and ECS worker modes)
 
 **Resources Deployed:**
 - **ECS Fargate Service**: `vincent-vocab-processor-cluster` / `ProcessorService`
@@ -372,6 +377,57 @@
 - 🔄 TypeScript compilation fixes and build configuration
 
 ---
+
+## Recent Updates (2025-11-13)
+
+### Critical Bug Fixes - Student Metrics Aggregation
+
+**Date:** 2025-11-13
+
+**Issues Found:**
+1. **Student metrics not populating**: Student metrics endpoints returning empty results (0 essays) even after essays were processed
+2. **S3 trigger failing**: S3 upload trigger Lambda attempting to re-upload essays that were already in S3, causing errors
+3. **Processor Lambda handler missing**: Processor Lambda code changed to worker pattern but missing `handler()` function for SQS event source compatibility
+
+**Root Causes:**
+1. Processor Lambda was not including `student_id` in messages sent to `EssayUpdateQueue`
+2. Student metrics aggregation Lambda requires `student_id` to query and aggregate essays
+3. S3 trigger was calling `process_single_essay()` which tried to upload essays to a new location
+4. Processor Lambda had `main()` worker loop but no `handler()` function for Lambda event-driven invocation
+
+**Fixes Applied:**
+1. ✅ **Processor Lambda (`lambda/processor/lambda_function.py`)**:
+   - Added `student_id` to EssayUpdateQueue messages (lines 655-657)
+   - Added `handler()` function for SQS event source compatibility (lines 536-694)
+   - Handler processes essays when invoked by Lambda SQS event source
+   - Maintains `main()` function for ECS worker mode (backward compatible)
+
+2. ✅ **S3 Upload Trigger Lambda (`lambda/s3_upload_trigger/lambda_function.py`)**:
+   - Fixed assignment essay processing to use existing S3 files (lines 315-374)
+   - Removed unnecessary re-upload attempt
+   - Directly sends SQS message with existing `file_key` for assignment essays
+   - Still extracts student name and creates/updates student records
+
+**Testing:**
+- ✅ Created `submit_essays.sh` script for automated essay submission
+- ✅ Created `BACKEND_E2E_TEST_GUIDE.md` with complete backend-only testing workflow
+- ✅ Successfully tested end-to-end: Assignment creation → Student creation → Essay upload → Processing → Metrics aggregation
+- ✅ Verified Sam Williams metrics now populate correctly (1 essay, avg_ttr: 1.0, avg_word_count: 86)
+- ✅ Verified Alex Johnson metrics populate correctly (2 essays, avg_ttr: 0.877, avg_word_count: 71)
+- ✅ Verified class metrics aggregation (3 essays, avg_ttr: 0.918, correctness: 93.3%)
+
+**Files Created:**
+- `submit_essays.sh` - Automated essay submission script using essays from `data/` directory
+- `BACKEND_E2E_TEST_GUIDE.md` - Complete step-by-step backend testing guide with AWS CLI and curl commands
+- `.e2e_config.example` - Configuration template for E2E testing
+- `trigger_student_aggregation.sh` - Manual trigger script for student metrics aggregation
+- `SUBMIT_ESSAYS_README.md` - Documentation for essay submission script
+
+**Impact:**
+- Student metrics aggregation now works correctly
+- S3 trigger processes assignment essays without errors
+- Processor Lambda supports both Lambda event-driven and ECS worker modes
+- Complete backend testing workflow available for validation
 
 ## Recent Updates (2025-11-11 to 2025-01-XX)
 

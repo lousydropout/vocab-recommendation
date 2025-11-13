@@ -173,3 +173,28 @@
 - Focus on core NLP/LLM functionality
 - Can extend later if needed
 
+---
+
+### D-011: Processor Lambda Dual Mode (Event-Driven + Worker)
+**Date**: 2025-11-13  
+**Status**: Accepted  
+**Context**: Processor Lambda code supports both Lambda event-driven (SQS event source) and ECS worker (long-polling) modes  
+**Decision**: Implement both `handler()` function for Lambda events and `main()` function for ECS worker  
+**Rationale**:
+- Maintains compatibility with existing SQS event source mapping
+- Supports future migration to ECS Fargate if needed
+- Same processing logic, different invocation patterns
+- Allows gradual migration without breaking changes
+
+**Implementation Details**:
+- `handler(event, context)`: Processes SQS events from Lambda event source
+- `main()`: Long-running worker loop for ECS Fargate (polls SQS continuously)
+- Both use same `process_message()` function for actual processing
+- Lambda automatically handles message deletion on success
+- ECS worker manually deletes messages after processing
+
+**Alternatives Considered**:
+- Separate codebases: More maintenance overhead
+- Lambda-only: Limited by package size constraints
+- ECS-only: Requires immediate migration, breaks existing setup
+

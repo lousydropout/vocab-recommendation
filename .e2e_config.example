@@ -1,0 +1,24 @@
+# E2E Test Configuration
+# Copy this file to .e2e_config and fill in your values
+# The script will automatically load values from .e2e_config if it exists
+
+# AWS Region
+export AWS_REGION="us-east-1"
+
+# Cognito Configuration
+export COGNITO_USER_POOL_ID="us-east-1_XXXXXXXXX"
+export COGNITO_CLIENT_ID="your-client-id-here"
+
+# Teacher Credentials
+export TEACHER_EMAIL="teacher@example.com"
+export TEACHER_PASSWORD="YourSecurePassword123!"
+
+# API Gateway
+export API_URL="https://your-api-id.execute-api.us-east-1.amazonaws.com/prod"
+
+# S3 Bucket
+export ESSAYS_BUCKET="vincent-vocab-essays-account-id-us-east-1"
+
+# SQS Queue
+export PROCESSING_QUEUE_URL="https://sqs.us-east-1.amazonaws.com/account-id/vincent-vocab-essay-processing-queue"
+

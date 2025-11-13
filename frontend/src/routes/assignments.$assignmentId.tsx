@@ -1,13 +1,14 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { requireAuth } from '../utils/route-protection'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { getAssignment, getClassMetrics, getAssignmentUploadUrl } from '../api/client'
+import type { AssignmentResponse } from '../types/api'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
 import { Button } from '../components/ui/button'
 import { Alert, AlertDescription } from '../components/ui/alert'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
 import { ArrowLeft, Loader2, AlertCircle, Upload, BarChart3, Users, TrendingUp, CheckCircle2 } from 'lucide-react'
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
 
 export const Route = createFileRoute('/assignments/$assignmentId')({
@@ -15,26 +16,93 @@ export const Route = createFileRoute('/assignments/$assignmentId')({
     await requireAuth()
   },
   component: AssignmentDetailPage,
+  errorComponent: ({ error }) => {
+    console.error('Assignment detail page error:', error)
+    return (
+      <div className="p-8">
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>
+            Failed to load assignment detail page: {error instanceof Error ? error.message : String(error)}
+          </AlertDescription>
+        </Alert>
+        <Button onClick={() => window.location.reload()} className="mt-4">
+          Reload Page
+        </Button>
+      </div>
+    )
+  },
 })
 
 function AssignmentDetailPage() {
   const { assignmentId } = Route.useParams()
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
+  
+  // Debug: Log to ensure component is rendering
+  console.log('AssignmentDetailPage rendering with assignmentId:', assignmentId)
   const [isUploading, setIsUploading] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [uploadSuccess, setUploadSuccess] = useState<string | null>(null)
   const [dragActive, setDragActive] = useState(false)
-
-  const { data: assignment, isLoading: assignmentLoading, error: assignmentError } = useQuery({
-    queryKey: ['assignment', assignmentId],
-    queryFn: () => getAssignment(assignmentId),
+  // Load uploaded files from localStorage on mount
+  const [uploadedFiles, setUploadedFiles] = useState<string[]>(() => {
+    try {
+      const stored = localStorage.getItem(`uploaded-files-${assignmentId}`)
+      return stored ? JSON.parse(stored) : []
+    } catch {
+      return []
+    }
   })
+  
+  const { data: assignment, isLoading: assignmentLoading, error: assignmentError } = useQuery<AssignmentResponse>({
+    queryKey: ['assignment', assignmentId],
+    queryFn: () => {
+      console.log('Fetching assignment:', assignmentId)
+      return getAssignment(assignmentId)
+    },
+    retry: 1,
+  })
+  
+  // Log errors separately
+  if (assignmentError) {
+    console.error('Error fetching assignment:', assignmentError)
+  }
 
-  const { data: metrics, isLoading: metricsLoading } = useQuery({
+  const { data: metrics, isLoading: metricsLoading, error: metricsError } = useQuery({
     queryKey: ['class-metrics', assignmentId],
     queryFn: () => getClassMetrics(assignmentId),
-    enabled: !!assignmentId,
+    enabled: !!assignmentId && !!assignment,
+    retry: 1,
+    refetchInterval: (query) => {
+      // Auto-refresh metrics every 10 seconds if we have essays but they might still be processing
+      const data = query.state.data as typeof metrics
+      if (data && data.stats && data.stats.essay_count > 0) {
+        return 10000 // 10 seconds
+      }
+      return false
+    },
   })
+  
+  // Save uploaded files to localStorage whenever they change
+  useEffect(() => {
+    try {
+      localStorage.setItem(`uploaded-files-${assignmentId}`, JSON.stringify(uploadedFiles))
+    } catch {
+      // Ignore localStorage errors
+    }
+  }, [uploadedFiles, assignmentId])
+  
+  // Clear uploaded files when metrics show they've been processed
+  useEffect(() => {
+    if (metrics && metrics.stats.essay_count > 0 && uploadedFiles.length > 0) {
+      // Clear the list after a delay to show they've been processed
+      const timer = setTimeout(() => {
+        setUploadedFiles([])
+      }, 60000) // Clear after 1 minute
+      return () => clearTimeout(timer)
+    }
+  }, [metrics, uploadedFiles.length])
 
   const handleDrag = useCallback((e: React.DragEvent) => {
     e.preventDefault()
@@ -46,23 +114,7 @@ function AssignmentDetailPage() {
     }
   }, [])
 
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault()
-    e.stopPropagation()
-    setDragActive(false)
-
-    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      handleFiles(Array.from(e.dataTransfer.files))
-    }
-  }, [])
-
-  const handleFileInput = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) {
-      handleFiles(Array.from(e.target.files))
-    }
-  }, [])
-
-  const handleFiles = async (files: File[]) => {
+  const handleFiles = useCallback(async (files: File[]) => {
     setIsUploading(true)
     setUploadError(null)
     setUploadSuccess(null)
@@ -79,6 +131,8 @@ function AssignmentDetailPage() {
         return
       }
 
+      const uploadedFileNames: string[] = []
+      
       // Upload each file
       for (const file of validFiles) {
         try {
@@ -97,42 +151,71 @@ function AssignmentDetailPage() {
           if (!uploadResponse.ok) {
             throw new Error(`Failed to upload ${file.name}`)
           }
+          
+          uploadedFileNames.push(file.name)
         } catch (err) {
           console.error(`Error uploading ${file.name}:`, err)
           setUploadError(`Failed to upload ${file.name}: ${err instanceof Error ? err.message : 'Unknown error'}`)
         }
       }
 
-      if (validFiles.length > 0) {
-        setUploadSuccess(`Successfully uploaded ${validFiles.length} file(s). Processing will begin shortly.`)
+      if (uploadedFileNames.length > 0) {
+        setUploadedFiles(prev => [...prev, ...uploadedFileNames])
+        setUploadSuccess(`Successfully uploaded ${uploadedFileNames.length} file(s). Processing will begin shortly.`)
+        // Invalidate metrics query to trigger refresh
+        queryClient.invalidateQueries({ queryKey: ['class-metrics', assignmentId] })
+        // Also set up delayed refreshes to check for updates
+        setTimeout(() => {
+          queryClient.invalidateQueries({ queryKey: ['class-metrics', assignmentId] })
+        }, 5000)
+        setTimeout(() => {
+          queryClient.invalidateQueries({ queryKey: ['class-metrics', assignmentId] })
+        }, 15000)
       }
     } catch (err) {
       setUploadError(err instanceof Error ? err.message : 'Failed to upload files')
     } finally {
       setIsUploading(false)
     }
-  }
+  }, [assignmentId, queryClient])
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setDragActive(false)
+
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      handleFiles(Array.from(e.dataTransfer.files))
+    }
+  }, [handleFiles])
+
+  const handleFileInput = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      handleFiles(Array.from(e.target.files))
+    }
+  }, [handleFiles])
 
   if (assignmentLoading) {
     return (
       <div className="p-8">
-        <div className="flex items-center justify-center py-12">
-          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        <div className="flex flex-col items-center justify-center py-12">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground mb-4" />
+          <p className="text-muted-foreground">Loading assignment...</p>
         </div>
       </div>
     )
   }
 
-  if (assignmentError || !assignment) {
+  if (assignmentError) {
     return (
       <div className="p-8">
-        <Alert variant="destructive">
+        <Alert variant="destructive" className="mb-4">
           <AlertCircle className="h-4 w-4" />
           <AlertDescription>
             {assignmentError instanceof Error ? assignmentError.message : 'Failed to load assignment'}
           </AlertDescription>
         </Alert>
-        <Button onClick={() => navigate({ to: '/assignments' })} className="mt-4">
+        <Button onClick={() => navigate({ to: '/assignments' })}>
           <ArrowLeft className="h-4 w-4 mr-2" />
           Back to Assignments
         </Button>
@@ -140,21 +223,38 @@ function AssignmentDetailPage() {
     )
   }
 
-  // Prepare chart data
-  const correctnessData = metrics ? [
-    { name: 'Correct', value: metrics.stats.correctness.correct, color: '#10b981' },
-    { name: 'Incorrect', value: metrics.stats.correctness.incorrect, color: '#ef4444' },
+  if (!assignment) {
+    return (
+      <div className="p-8">
+        <Alert variant="destructive" className="mb-4">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>
+            Assignment not found
+          </AlertDescription>
+        </Alert>
+        <Button onClick={() => navigate({ to: '/assignments' })}>
+          <ArrowLeft className="h-4 w-4 mr-2" />
+          Back to Assignments
+        </Button>
+      </div>
+    )
+  }
+
+  // Prepare chart data (with defensive checks)
+  const correctnessData = metrics?.stats?.correctness ? [
+    { name: 'Correct', value: metrics.stats.correctness.correct || 0, color: '#10b981' },
+    { name: 'Incorrect', value: metrics.stats.correctness.incorrect || 0, color: '#ef4444' },
   ] : []
 
-  const avgTtrData = metrics ? [
+  const avgTtrData = metrics?.stats?.avg_ttr !== undefined ? [
     { name: 'Average TTR', value: metrics.stats.avg_ttr },
   ] : []
 
-  const avgFreqRankData = metrics ? [
+  const avgFreqRankData = metrics?.stats?.avg_freq_rank !== undefined ? [
     { name: 'Avg Word Difficulty', value: Math.round(metrics.stats.avg_freq_rank) },
   ] : []
 
-  const correctRate = metrics && metrics.stats.essay_count > 0
+  const correctRate = metrics?.stats && metrics.stats.essay_count > 0 && metrics.stats.correctness
     ? ((metrics.stats.correctness.correct / 
         (metrics.stats.correctness.correct + metrics.stats.correctness.incorrect)) * 100).toFixed(1)
     : '0.0'
@@ -190,6 +290,29 @@ function AssignmentDetailPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
+          {/* Upload Status */}
+          {uploadedFiles.length > 0 && (
+            <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+              <p className="text-sm font-medium text-blue-900 mb-2">
+                Recently Uploaded ({uploadedFiles.length} file{uploadedFiles.length !== 1 ? 's' : ''})
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {uploadedFiles.slice(-5).map((fileName, idx) => (
+                  <span key={idx} className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                    {fileName}
+                  </span>
+                ))}
+                {uploadedFiles.length > 5 && (
+                  <span className="text-xs text-blue-600">
+                    +{uploadedFiles.length - 5} more
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-blue-700 mt-2">
+                Files are being processed. Metrics will update automatically once processing completes (usually 30-60 seconds).
+              </p>
+            </div>
+          )}
           {uploadError && (
             <Alert variant="destructive" className="mb-4">
               <AlertCircle className="h-4 w-4" />
@@ -254,6 +377,14 @@ function AssignmentDetailPage() {
         </TabsList>
 
         <TabsContent value="overview" className="space-y-6">
+          {metricsError && (
+            <Alert variant="destructive" className="mb-4">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>
+                Failed to load metrics: {metricsError instanceof Error ? metricsError.message : 'Unknown error'}
+              </AlertDescription>
+            </Alert>
+          )}
           {metricsLoading ? (
             <Card>
               <CardContent className="py-12">
@@ -413,12 +544,32 @@ function AssignmentDetailPage() {
             </CardHeader>
             <CardContent>
               {metrics && metrics.stats.essay_count > 0 ? (
+                <div className="space-y-4">
+                  <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+                    <p className="text-sm font-medium text-green-900 mb-1">
+                      {metrics.stats.essay_count} essay{metrics.stats.essay_count !== 1 ? 's' : ''} processed
+                    </p>
+                    <p className="text-xs text-green-700">
+                      Essays are being analyzed and metrics are being calculated. Individual student results will be displayed here once the API endpoint is available.
+                    </p>
+                  </div>
+                  <div className="text-center py-4">
+                    <p className="text-muted-foreground mb-2">
+                      Student results table will be displayed here once individual essay data is available.
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      Currently showing aggregate metrics. Individual student breakdown coming soon.
+                    </p>
+                  </div>
+                </div>
+              ) : uploadedFiles.length > 0 ? (
                 <div className="text-center py-8">
-                  <p className="text-muted-foreground mb-4">
-                    Student results table will be displayed here once individual essay data is available.
+                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground mx-auto mb-4" />
+                  <p className="text-muted-foreground mb-2">
+                    Essays are being processed...
                   </p>
                   <p className="text-sm text-muted-foreground">
-                    Currently showing aggregate metrics. Individual student breakdown coming soon.
+                    Processing typically takes 30-60 seconds per essay. This page will update automatically.
                   </p>
                 </div>
               ) : (

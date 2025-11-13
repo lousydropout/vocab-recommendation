@@ -533,6 +533,167 @@ def main():
     logger.info("Processor worker shutting down")
 
 
+def handler(event, context):
+    """
+    Lambda handler for SQS event source.
+    This is called by Lambda when messages arrive in the SQS queue.
+    Lambda automatically handles message deletion on successful completion.
+    """
+    logger.info("Processor Lambda invoked", extra={
+        "record_count": len(event.get('Records', [])),
+        "request_id": context.aws_request_id if context else None,
+    })
+    
+    for record in event.get('Records', []):
+        essay_id = None
+        try:
+            # Parse SQS message
+            message_body = json.loads(record['body'])
+            essay_id = message_body['essay_id']
+            file_key = message_body['file_key']
+            teacher_id = message_body.get('teacher_id')
+            assignment_id = message_body.get('assignment_id')
+            student_id = message_body.get('student_id')
+            
+            logger.info("Processing started", extra={
+                "essay_id": essay_id,
+                "file_key": file_key,
+                "teacher_id": teacher_id,
+                "assignment_id": assignment_id,
+                "student_id": student_id,
+                "message_id": record.get('messageId'),
+            })
+            
+            # Update status to 'processing'
+            update_dynamodb(
+                essay_id,
+                'processing',
+                None,
+                None,
+                teacher_id=teacher_id,
+                assignment_id=assignment_id,
+                student_id=student_id
+            )
+            logger.info("Status updated to processing", extra={"essay_id": essay_id})
+            
+            # Download essay from S3
+            essay_text = download_essay_from_s3(ESSAYS_BUCKET, file_key)
+            logger.info("Essay downloaded from S3", extra={
+                "essay_id": essay_id,
+                "text_length": len(essay_text),
+            })
+            
+            # Run spaCy analysis
+            analysis_result = run_spacy_analysis(essay_text)
+            metrics = {k: v for k, v in analysis_result.items() if k != 'doc'}
+            doc = analysis_result['doc']
+            
+            logger.info("spaCy analysis complete", extra={
+                "essay_id": essay_id,
+                "word_count": metrics['word_count'],
+                "unique_words": metrics['unique_words'],
+                "type_token_ratio": float(metrics['type_token_ratio']),
+            })
+            
+            # Select candidate words
+            candidates = select_candidate_words(doc, max_candidates=20)
+            logger.info("Candidate words selected", extra={
+                "essay_id": essay_id,
+                "candidate_count": len(candidates),
+            })
+            
+            # Evaluate each candidate with Bedrock
+            feedback = []
+            bedrock_errors = 0
+            for candidate in candidates:
+                word = candidate['word']
+                sentence = candidate['sentence']
+                
+                # Get surrounding context
+                context_start = max(0, essay_text.find(sentence) - 100)
+                context_end = min(len(essay_text), essay_text.find(sentence) + len(sentence) + 100)
+                essay_context = essay_text[context_start:context_end]
+                
+                evaluation = evaluate_word_with_bedrock(word, sentence, essay_context)
+                feedback.append(evaluation)
+                
+                if 'error' in evaluation.get('comment', '').lower():
+                    bedrock_errors += 1
+                
+                logger.debug("Word evaluated", extra={
+                    "essay_id": essay_id,
+                    "word": word,
+                    "correct": evaluation['correct'],
+                })
+            
+            if bedrock_errors > 0:
+                logger.warning("Some Bedrock evaluations had errors", extra={
+                    "essay_id": essay_id,
+                    "error_count": bedrock_errors,
+                    "total_words": len(candidates),
+                })
+            
+            # Update DynamoDB with results
+            update_dynamodb(
+                essay_id,
+                'processed',
+                metrics,
+                feedback,
+                teacher_id=teacher_id,
+                assignment_id=assignment_id,
+                student_id=student_id
+            )
+            
+            # Send message to EssayUpdateQueue for aggregation (if assignment_id is present)
+            if ESSAY_UPDATE_QUEUE_URL and assignment_id and teacher_id:
+                try:
+                    update_message_body = {
+                        'teacher_id': teacher_id,
+                        'assignment_id': assignment_id,
+                        'essay_id': essay_id,
+                    }
+                    # Include student_id if available (required for student metrics aggregation)
+                    if student_id:
+                        update_message_body['student_id'] = student_id
+                    
+                    sqs_client.send_message(
+                        QueueUrl=ESSAY_UPDATE_QUEUE_URL,
+                        MessageBody=json.dumps(update_message_body)
+                    )
+                    logger.info("Sent message to EssayUpdateQueue", extra={
+                        "teacher_id": teacher_id,
+                        "assignment_id": assignment_id,
+                        "essay_id": essay_id,
+                        "student_id": student_id,
+                    })
+                except Exception as e:
+                    logger.warning("Failed to send message to EssayUpdateQueue", extra={
+                        "error": str(e),
+                    })
+            
+            logger.info("Processing completed successfully", extra={
+                "essay_id": essay_id,
+                "metrics_computed": bool(metrics),
+                "feedback_count": len(feedback),
+            })
+            
+        except Exception as e:
+            logger.error("Error processing message in handler", extra={
+                "essay_id": essay_id or "unknown",
+                "error": str(e),
+                "error_type": type(e).__name__,
+            }, exc_info=True)
+            # Re-raise to trigger DLQ after retries
+            raise
+    
+    logger.info("Processor Lambda completed", extra={"processed_count": len(event.get('Records', []))})
+    
+    return {
+        'statusCode': 200,
+        'body': json.dumps('Processing complete')
+    }
+
+
 if __name__ == "__main__":
     main()
 

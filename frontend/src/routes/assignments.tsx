@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from '@tanstack/react-router'
+import { createFileRoute, useNavigate, Outlet, useLocation } from '@tanstack/react-router'
 import { requireAuth } from '../utils/route-protection'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
@@ -30,9 +30,13 @@ export const Route = createFileRoute('/assignments')({
 
 function AssignmentsPage() {
   const navigate = useNavigate()
+  const location = useLocation()
   const queryClient = useQueryClient()
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  
+  // Check if we're on a child route (assignment detail)
+  const isDetailPage = location.pathname !== '/assignments'
 
   // Fetch assignments
   const { data: assignments = [], isLoading } = useQuery({
@@ -48,7 +52,10 @@ function AssignmentsPage() {
       setIsDialogOpen(false)
       setError(null)
       // Navigate to the new assignment detail page
-      navigate({ to: `/assignments/${data.assignment_id}` })
+      navigate({ 
+        to: '/assignments/$assignmentId',
+        params: { assignmentId: data.assignment_id }
+      })
     },
     onError: (err: Error) => {
       setError(err.message)
@@ -72,6 +79,12 @@ function AssignmentsPage() {
     createMutation.mutate(data)
   }
 
+  // If we're on a detail page, just render the outlet (child route)
+  if (isDetailPage) {
+    return <Outlet />
+  }
+
+  // Otherwise, render the assignments list
   return (
     <div className="p-8">
       <div className="mb-8 flex justify-between items-center">
@@ -150,7 +163,10 @@ function AssignmentsPage() {
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => navigate({ to: `/assignments/${assignment.assignment_id}` })}
+                        onClick={() => navigate({ 
+                          to: '/assignments/$assignmentId',
+                          params: { assignmentId: assignment.assignment_id }
+                        })}
                       >
                         <Eye className="h-4 w-4 mr-1" />
                         View
