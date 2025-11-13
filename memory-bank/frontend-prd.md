@@ -118,7 +118,7 @@ The frontend interacts with the backend via authenticated JWT-secured API Gatewa
 
 ## Current Status
 
-**Status**: Epic 2 Complete - Ready for Epic 3
+**Status**: Epic 4 Complete - Ready for Epic 5
 
 **Epic 1 Completion (2025-01-XX)**:
 - ✅ Directory structure created: `api/`, `components/`, `hooks/`, `pages/`, `utils/`, `types/`
@@ -143,18 +143,46 @@ The frontend interacts with the backend via authenticated JWT-secured API Gatewa
 - ✅ Build verification: `bun run build` passes successfully
 - ✅ Bundle size: ~415KB (gzipped: ~127KB) with code splitting
 
+**Epic 3 Completion (2025-01-XX)**:
+- ✅ Renamed Header component to Sidebar for better semantic clarity
+- ✅ Implemented responsive sidebar navigation with collapsible behavior
+- ✅ Added navigation links: Home, Assignments, Students
+- ✅ Integrated logout functionality with AWS Amplify
+- ✅ Updated root route to conditionally render Sidebar (hidden on login page)
+- ✅ Added main content area with proper margin for sidebar (lg:ml-64)
+- ✅ Implemented mobile-responsive design with hamburger menu
+- ✅ Added user info display in sidebar
+- ✅ Build verification: `bun run build` passes successfully
+- ✅ Bundle size: ~415KB (gzipped: ~127KB) with code splitting
+
+**Epic 4 Completion (2025-01-XX)**:
+- ✅ Created students list page (`src/routes/students.tsx`) with full CRUD operations
+- ✅ Added shadcn/ui components: `Dialog`, `Table`, `Input`, `Label`, `Textarea`
+- ✅ Implemented create/edit student dialog with form validation
+- ✅ Added delete student functionality with confirmation dialog
+- ✅ Created student detail page (`src/routes/students.$studentId.tsx`)
+- ✅ Integrated TanStack Query for data fetching and mutations
+- ✅ Implemented optimistic updates with query invalidation
+- ✅ Added loading, empty, and error states
+- ✅ Fixed delete button readability (changed destructive variant to use text-white)
+- ✅ Build verification: `bun run build` passes successfully
+- ✅ Bundle size: ~453KB (gzipped: ~140KB) with code splitting
+- ✅ All TypeScript errors resolved
+
 **Current Setup**:
 - TanStack Router file-based routing configured
 - React 19 + TypeScript
 - Tailwind CSS v4 with theme variables
-- Basic Header component with sidebar
+- Responsive Sidebar component with navigation
 - Vite build system (PRD requires Bun build - may need migration)
 - Global providers configured (Auth, Query)
 - API client ready with all endpoints
 - Authentication utilities ready
 - Login page implemented with AWS Amplify integration
 - Route protection using TanStack Router `beforeLoad` guards
-- shadcn/ui components (Button, Card, Alert) available
+- shadcn/ui components (Button, Card, Alert, Dialog, Table, Input, Label, Textarea) available
+- Students CRUD fully implemented with TanStack Query
+- Student detail page implemented
 
 **Reference Implementation**:
 - `old_frontend/` contains complete implementation using:

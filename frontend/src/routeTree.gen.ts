@@ -14,6 +14,7 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as AssignmentsRouteImport } from './routes/assignments'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as StudentsStudentIdRouteImport } from './routes/students.$studentId'
+import { Route as AssignmentsAssignmentIdRouteImport } from './routes/assignments.$assignmentId'
 
 const StudentsRoute = StudentsRouteImport.update({
   id: '/students',
@@ -40,27 +41,35 @@ const StudentsStudentIdRoute = StudentsStudentIdRouteImport.update({
   path: '/$studentId',
   getParentRoute: () => StudentsRoute,
 } as any)
+const AssignmentsAssignmentIdRoute = AssignmentsAssignmentIdRouteImport.update({
+  id: '/$assignmentId',
+  path: '/$assignmentId',
+  getParentRoute: () => AssignmentsRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/assignments': typeof AssignmentsRoute
+  '/assignments': typeof AssignmentsRouteWithChildren
   '/login': typeof LoginRoute
   '/students': typeof StudentsRouteWithChildren
+  '/assignments/$assignmentId': typeof AssignmentsAssignmentIdRoute
   '/students/$studentId': typeof StudentsStudentIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/assignments': typeof AssignmentsRoute
+  '/assignments': typeof AssignmentsRouteWithChildren
   '/login': typeof LoginRoute
   '/students': typeof StudentsRouteWithChildren
+  '/assignments/$assignmentId': typeof AssignmentsAssignmentIdRoute
   '/students/$studentId': typeof StudentsStudentIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/assignments': typeof AssignmentsRoute
+  '/assignments': typeof AssignmentsRouteWithChildren
   '/login': typeof LoginRoute
   '/students': typeof StudentsRouteWithChildren
+  '/assignments/$assignmentId': typeof AssignmentsAssignmentIdRoute
   '/students/$studentId': typeof StudentsStudentIdRoute
 }
 export interface FileRouteTypes {
@@ -70,21 +79,29 @@ export interface FileRouteTypes {
     | '/assignments'
     | '/login'
     | '/students'
+    | '/assignments/$assignmentId'
     | '/students/$studentId'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/assignments' | '/login' | '/students' | '/students/$studentId'
+  to:
+    | '/'
+    | '/assignments'
+    | '/login'
+    | '/students'
+    | '/assignments/$assignmentId'
+    | '/students/$studentId'
   id:
     | '__root__'
     | '/'
     | '/assignments'
     | '/login'
     | '/students'
+    | '/assignments/$assignmentId'
     | '/students/$studentId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  AssignmentsRoute: typeof AssignmentsRoute
+  AssignmentsRoute: typeof AssignmentsRouteWithChildren
   LoginRoute: typeof LoginRoute
   StudentsRoute: typeof StudentsRouteWithChildren
 }
@@ -126,8 +143,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof StudentsStudentIdRouteImport
       parentRoute: typeof StudentsRoute
     }
+    '/assignments/$assignmentId': {
+      id: '/assignments/$assignmentId'
+      path: '/$assignmentId'
+      fullPath: '/assignments/$assignmentId'
+      preLoaderRoute: typeof AssignmentsAssignmentIdRouteImport
+      parentRoute: typeof AssignmentsRoute
+    }
   }
 }
+
+interface AssignmentsRouteChildren {
+  AssignmentsAssignmentIdRoute: typeof AssignmentsAssignmentIdRoute
+}
+
+const AssignmentsRouteChildren: AssignmentsRouteChildren = {
+  AssignmentsAssignmentIdRoute: AssignmentsAssignmentIdRoute,
+}
+
+const AssignmentsRouteWithChildren = AssignmentsRoute._addFileChildren(
+  AssignmentsRouteChildren,
+)
 
 interface StudentsRouteChildren {
   StudentsStudentIdRoute: typeof StudentsStudentIdRoute
@@ -143,7 +179,7 @@ const StudentsRouteWithChildren = StudentsRoute._addFileChildren(
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  AssignmentsRoute: AssignmentsRoute,
+  AssignmentsRoute: AssignmentsRouteWithChildren,
   LoginRoute: LoginRoute,
   StudentsRoute: StudentsRouteWithChildren,
 }

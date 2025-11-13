@@ -162,6 +162,17 @@ export async function getAssignment(assignmentId: string) {
   return response.json();
 }
 
+export async function getAssignmentUploadUrl(assignmentId: string, fileName: string) {
+  const response = await apiRequest(`${API_BASE_URL}/assignments/${assignmentId}/upload-url`, {
+    method: 'POST',
+    body: JSON.stringify({ file_name: fileName }),
+  });
+  if (!response.ok) {
+    throw new Error(`Failed to get upload URL: ${response.statusText}`);
+  }
+  return response.json();
+}
+
 // Students endpoints
 export async function createStudent(student: { name: string; grade_level?: number; notes?: string }) {
   const response = await apiRequest(`${API_BASE_URL}/students`, {

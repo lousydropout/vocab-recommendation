@@ -450,8 +450,8 @@
 **Epic Status:**
 - ✅ **Epic 1:** Project Setup - COMPLETE
 - ✅ **Epic 2:** Authentication System - COMPLETE
-- ⏳ **Epic 3:** Layout & Navigation (pending approval)
-- ⏳ **Epic 4:** Students CRUD
+- ✅ **Epic 3:** Layout & Navigation - COMPLETE
+- ✅ **Epic 4:** Students CRUD - COMPLETE
 - ⏳ **Epic 5:** Assignments
 - ⏳ **Epic 6:** Class Analytics
 - ⏳ **Epic 7:** Student Analytics
@@ -482,18 +482,46 @@
 - ✅ Build verification: `bun run build` passes successfully
 - ✅ Bundle size: ~415KB (gzipped: ~127KB) with code splitting
 
+**Epic 3 Completion Summary (2025-01-XX):**
+- ✅ Renamed Header component to Sidebar for better semantic clarity
+- ✅ Implemented responsive sidebar navigation with collapsible behavior
+- ✅ Added navigation links: Home, Assignments, Students
+- ✅ Integrated logout functionality with AWS Amplify
+- ✅ Updated root route to conditionally render Sidebar (hidden on login page)
+- ✅ Added main content area with proper margin for sidebar (lg:ml-64)
+- ✅ Implemented mobile-responsive design with hamburger menu
+- ✅ Added user info display in sidebar
+- ✅ Build verification: `bun run build` passes successfully
+- ✅ Bundle size: ~415KB (gzipped: ~127KB) with code splitting
+
+**Epic 4 Completion Summary (2025-01-XX):**
+- ✅ Created students list page (`src/routes/students.tsx`) with full CRUD operations
+- ✅ Added shadcn/ui components: `Dialog`, `Table`, `Input`, `Label`, `Textarea`
+- ✅ Implemented create/edit student dialog with form validation
+- ✅ Added delete student functionality with confirmation dialog
+- ✅ Created student detail page (`src/routes/students.$studentId.tsx`)
+- ✅ Integrated TanStack Query for data fetching and mutations
+- ✅ Implemented optimistic updates with query invalidation
+- ✅ Added loading, empty, and error states
+- ✅ Fixed delete button readability (changed destructive variant to use text-white)
+- ✅ Build verification: `bun run build` passes successfully
+- ✅ Bundle size: ~453KB (gzipped: ~140KB) with code splitting
+- ✅ All TypeScript errors resolved
+
 **Current State:**
 - TanStack Router file-based routing scaffolded
 - React 19 + TypeScript configured
 - Tailwind CSS v4 with theme variables
-- Basic Header component with sidebar
+- Responsive Sidebar component with navigation
 - Vite build system (PRD requires Bun build - decision pending)
 - Global providers configured (Auth, Query)
 - API client ready with all endpoints
 - Authentication utilities ready
 - Login page implemented with AWS Amplify integration
 - Route protection using TanStack Router `beforeLoad` guards
-- shadcn/ui components (Button, Card, Alert) available
+- shadcn/ui components (Button, Card, Alert, Dialog, Table, Input, Label, Textarea) available
+- Students CRUD fully implemented with TanStack Query
+- Student detail page implemented
 
 **Migration Source:**
 - `old_frontend/` contains complete implementation with:
@@ -517,7 +545,7 @@
 4. ✅ **Epic 7 (Backend):** Student/assignment management and batch uploads - COMPLETE
 5. ✅ **Epic 8 (Backend):** Analytics endpoints and override functionality - COMPLETE
 6. ✅ **Epic 8 (Frontend - Old):** Class dashboard, student dashboard, essay review page - COMPLETE (in `old_frontend/`)
-7. 🔄 **Frontend Rebuild (New):** TanStack Router + Bun version - IN PROGRESS (Epic 1 & 2 Complete, Epic 3 Pending)
+7. 🔄 **Frontend Rebuild (New):** TanStack Router + Bun version - IN PROGRESS (Epic 1-4 Complete, Epic 5 Pending)
 8. ⏳ **Frontend Testing**: Set up and run frontend tests in new frontend
 9. ⏳ **Frontend Deployment**: Deploy new frontend to production (S3 + CloudFront, or Vercel/Netlify)
 10. Configure SNS topic subscriptions (email, Slack, etc.) for alarm notifications
