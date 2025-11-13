@@ -441,7 +441,7 @@
 
 ### 🔄 Frontend Rebuild (TanStack Router + Bun) - IN PROGRESS
 
-**Status:** Epic 1 Complete, Ready for Epic 2
+**Status:** Epic 2 Complete, Ready for Epic 3
 
 **Goal:** Rebuild frontend using TanStack Router file-based routing, Bun build system, and migrate all features from `old_frontend/`.
 
@@ -449,8 +449,8 @@
 
 **Epic Status:**
 - ✅ **Epic 1:** Project Setup - COMPLETE
-- ⏳ **Epic 2:** Authentication System (pending approval)
-- ⏳ **Epic 3:** Layout & Navigation
+- ✅ **Epic 2:** Authentication System - COMPLETE
+- ⏳ **Epic 3:** Layout & Navigation (pending approval)
 - ⏳ **Epic 4:** Students CRUD
 - ⏳ **Epic 5:** Assignments
 - ⏳ **Epic 6:** Class Analytics
@@ -470,6 +470,18 @@
 - ✅ Build verification: `bun run build` passes successfully
 - ✅ Bundle size: ~348KB (gzipped: ~110KB)
 
+**Epic 2 Completion Summary (2025-01-XX):**
+- ✅ Created shadcn/ui components: `Button`, `Card`, `Alert`
+- ✅ Added dependency: `@radix-ui/react-slot@1.2.4`
+- ✅ Created login page (`src/routes/login.tsx`) with email/password form
+- ✅ Implemented error handling for Cognito errors (NotAuthorizedException, UserNotConfirmedException)
+- ✅ Created route protection utility (`src/utils/route-protection.ts`) with `requireAuth()` function
+- ✅ Added `beforeLoad` guard to index route for authentication protection
+- ✅ Updated root route to conditionally hide Header on login page
+- ✅ Integrated login with AuthProvider to refresh auth state after login
+- ✅ Build verification: `bun run build` passes successfully
+- ✅ Bundle size: ~415KB (gzipped: ~127KB) with code splitting
+
 **Current State:**
 - TanStack Router file-based routing scaffolded
 - React 19 + TypeScript configured
@@ -479,6 +491,9 @@
 - Global providers configured (Auth, Query)
 - API client ready with all endpoints
 - Authentication utilities ready
+- Login page implemented with AWS Amplify integration
+- Route protection using TanStack Router `beforeLoad` guards
+- shadcn/ui components (Button, Card, Alert) available
 
 **Migration Source:**
 - `old_frontend/` contains complete implementation with:
@@ -502,7 +517,7 @@
 4. ✅ **Epic 7 (Backend):** Student/assignment management and batch uploads - COMPLETE
 5. ✅ **Epic 8 (Backend):** Analytics endpoints and override functionality - COMPLETE
 6. ✅ **Epic 8 (Frontend - Old):** Class dashboard, student dashboard, essay review page - COMPLETE (in `old_frontend/`)
-7. 🔄 **Frontend Rebuild (New):** TanStack Router + Bun version - IN PROGRESS (Epic 1 Complete, Epic 2 Pending)
+7. 🔄 **Frontend Rebuild (New):** TanStack Router + Bun version - IN PROGRESS (Epic 1 & 2 Complete, Epic 3 Pending)
 8. ⏳ **Frontend Testing**: Set up and run frontend tests in new frontend
 9. ⏳ **Frontend Deployment**: Deploy new frontend to production (S3 + CloudFront, or Vercel/Netlify)
 10. Configure SNS topic subscriptions (email, Slack, etc.) for alarm notifications

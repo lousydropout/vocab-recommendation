@@ -118,7 +118,7 @@ The frontend interacts with the backend via authenticated JWT-secured API Gatewa
 
 ## Current Status
 
-**Status**: Epic 1 Complete - Ready for Epic 2
+**Status**: Epic 2 Complete - Ready for Epic 3
 
 **Epic 1 Completion (2025-01-XX)**:
 - ✅ Directory structure created: `api/`, `components/`, `hooks/`, `pages/`, `utils/`, `types/`
@@ -131,6 +131,18 @@ The frontend interacts with the backend via authenticated JWT-secured API Gatewa
 - ✅ Build verification: `bun run build` passes successfully
 - ✅ Bundle size: ~348KB (gzipped: ~110KB)
 
+**Epic 2 Completion (2025-01-XX)**:
+- ✅ Created shadcn/ui components: `Button`, `Card`, `Alert`
+- ✅ Added dependency: `@radix-ui/react-slot@1.2.4`
+- ✅ Created login page (`src/routes/login.tsx`) with email/password form
+- ✅ Implemented error handling for Cognito errors (NotAuthorizedException, UserNotConfirmedException)
+- ✅ Created route protection utility (`src/utils/route-protection.ts`) with `requireAuth()` function
+- ✅ Added `beforeLoad` guard to index route for authentication protection
+- ✅ Updated root route to conditionally hide Header on login page
+- ✅ Integrated login with AuthProvider to refresh auth state after login
+- ✅ Build verification: `bun run build` passes successfully
+- ✅ Bundle size: ~415KB (gzipped: ~127KB) with code splitting
+
 **Current Setup**:
 - TanStack Router file-based routing configured
 - React 19 + TypeScript
@@ -140,6 +152,9 @@ The frontend interacts with the backend via authenticated JWT-secured API Gatewa
 - Global providers configured (Auth, Query)
 - API client ready with all endpoints
 - Authentication utilities ready
+- Login page implemented with AWS Amplify integration
+- Route protection using TanStack Router `beforeLoad` guards
+- shadcn/ui components (Button, Card, Alert) available
 
 **Reference Implementation**:
 - `old_frontend/` contains complete implementation using:
