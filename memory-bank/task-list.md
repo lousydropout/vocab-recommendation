@@ -572,19 +572,35 @@
    - Queue messages when feedback is overridden
    - Aggregation Lambda processes updates asynchronously
 
+6. ✅ **Added `/essays/student/{student_id}` endpoint**
+   - Returns all processed essays for a student, sorted by created_at
+   - Used for displaying real time-series data in student detail view
+   - Implemented in `lambda/api/app/routes/essays.py`
+   - API Gateway route added in CDK stack
+
+7. ✅ **Updated trend calculation logic**
+   - Changed from requiring 6+ essays to requiring 2+ essays
+   - Compares most recent essay to previous essay (simpler calculation)
+   - Returns `null` when insufficient essays with explanatory message
+   - Updated in `lambda/aggregations/student_metrics.py`
+
 ### Frontend Tasks
 
 1. ✅ **Class Dashboard: charts for avg TTR, word difficulty, correctness distribution**
-   - Component: `ClassDashboard.tsx`
+   - Component: `ClassDashboard.tsx` / `assignments.$assignmentId.tsx`
    - Displays assignment-level metrics with Recharts visualizations
    - Shows average type-token ratio, word count, correctness distribution
    - Navigation to individual essays
+   - Clickable student names linking to student detail view
 
 2. ✅ **Student Dashboard: time-series of metrics + essay list**
-   - Component: `StudentDashboard.tsx`
-   - Displays student-level metrics over time
+   - Component: `StudentDashboard.tsx` / `students.$studentId.tsx`
+   - Displays student-level metrics over time (using real essay data)
    - Shows essay list with links to review pages
-   - Trend indicators (improving, stable, declining)
+   - Trend indicators (improving, stable, declining) - requires 2+ essays
+   - Separated assignments into "Assignments" (submitted) and "Unsubmitted Assignments"
+   - Individual essay buttons when multiple essays exist per assignment
+   - Clickable assignment names linking to assignment detail view
 
 3. ✅ **Essay Review Page:**
    - Component: `EssayReview.tsx`

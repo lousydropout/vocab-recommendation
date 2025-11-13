@@ -395,6 +395,9 @@ export class VocabRecommendationStack extends cdk.Stack {
     const essayIdResourceOverride = essaysResource.addResource('{essay_id}');
     const essayOverrideResource = essayIdResourceOverride.addResource('override');
     essayOverrideResource.addMethod('PATCH', apiIntegration, authorizerOptions); // Override essay feedback
+    const essaysStudentResource = essaysResource.addResource('student');
+    const essaysStudentIdResource = essaysStudentResource.addResource('{student_id}');
+    essaysStudentIdResource.addMethod('GET', apiIntegration, authorizerOptions); // List essays for student
 
     // ============================================
     // ECS Fargate Worker Service (replaces Processor Lambda)

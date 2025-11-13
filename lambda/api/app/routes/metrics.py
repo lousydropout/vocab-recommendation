@@ -112,7 +112,7 @@ async def get_student_metrics(
     - Average unique words
     - Average frequency rank
     - Total essays
-    - Trend (improving/stable/declining)
+    - Trend (improving/stable/declining/null - null when < 2 essays)
     - Last essay date
     """
     if not student_metrics_table:
@@ -136,7 +136,7 @@ async def get_student_metrics(
                     'avg_unique_words': 0.0,
                     'avg_freq_rank': 0.0,
                     'total_essays': 0,
-                    'trend': 'stable',
+                    'trend': None,
                     'last_essay_date': None,
                 },
                 updated_at='',

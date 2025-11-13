@@ -47,10 +47,21 @@ export interface StudentMetricsResponse {
     avg_unique_words: number;
     avg_freq_rank: number;
     total_essays: number;
-    trend: 'improving' | 'stable' | 'declining';
+    trend: 'improving' | 'stable' | 'declining' | null;
     last_essay_date?: string;
   };
   updated_at: string;
+}
+
+export interface StudentEssayResponse {
+  essay_id: string;
+  assignment_id?: string;
+  created_at: string;
+  metrics: {
+    type_token_ratio: number;
+    word_count: number;
+    avg_word_freq_rank?: number;
+  };
 }
 
 export interface EssayOverrideRequest {

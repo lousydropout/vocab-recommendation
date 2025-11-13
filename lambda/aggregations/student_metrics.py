@@ -102,7 +102,7 @@ def compute_student_metrics(essays: List[Dict]) -> Dict[str, Any]:
             'avg_unique_words': 0.0,
             'avg_freq_rank': 0.0,
             'total_essays': 0,
-            'trend': 'stable',
+            'trend': None,
             'last_essay_date': None,
         }
     
@@ -147,15 +147,22 @@ def compute_student_metrics(essays: List[Dict]) -> Dict[str, Any]:
     avg_unique_words = sum(unique_words_values) / len(unique_words_values) if unique_words_values else 0.0
     avg_freq_rank = sum(freq_rank_values) / len(freq_rank_values) if freq_rank_values else 0.0
     
-    # Determine trend (simple: compare last 3 essays to previous 3)
-    trend = 'stable'
-    if len(ttr_values) >= 6:
-        recent_ttr = sum(ttr_values[-3:]) / 3
-        previous_ttr = sum(ttr_values[-6:-3]) / 3
+    # Determine trend (compare most recent essay to previous essay)
+    # Requires at least 2 essays to calculate trend
+    trend = None
+    if len(ttr_values) >= 2:
+        # Compare most recent essay TTR to previous essay TTR
+        recent_ttr = ttr_values[-1]
+        previous_ttr = ttr_values[-2]
         if recent_ttr > previous_ttr * 1.05:  # 5% improvement threshold
             trend = 'improving'
         elif recent_ttr < previous_ttr * 0.95:  # 5% decline threshold
             trend = 'declining'
+        else:
+            trend = 'stable'
+    else:
+        # Insufficient essays to determine trend
+        trend = None
     
     # Get most recent essay date
     last_essay_date = max(essay_dates) if essay_dates else None

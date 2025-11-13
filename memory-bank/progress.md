@@ -378,6 +378,82 @@
 
 ---
 
+## Recent Updates (2025-01-XX)
+
+### Frontend Improvements - Real Data Integration & Navigation
+
+**Date:** 2025-01-XX
+
+**Summary:**
+- Replaced all fake/mock data with real API data
+- Added comprehensive navigation between related views
+- Improved data accuracy and user experience
+
+**Completed:**
+
+1. ✅ **Replaced Fake Time-Series Data**:
+   - Removed mock "Week 1, Week 2, Week 3" data generation
+   - Added `GET /essays/student/{student_id}` API endpoint to fetch real essay data
+   - Time-series chart now displays actual essay dates and metrics
+   - Chart only shows when 2+ essays exist (with helpful message for single essays)
+
+2. ✅ **Updated Trend Calculation**:
+   - Changed from requiring 6+ essays to requiring 2+ essays
+   - Trend now compares most recent essay to previous essay (instead of 3-essay averages)
+   - Returns `null` when insufficient essays (< 2) with explanatory message
+   - Updated backend (`lambda/aggregations/student_metrics.py`) and frontend types
+
+3. ✅ **Enhanced Navigation**:
+   - Made student names clickable in assignment detail view (navigates to student detail)
+   - Made assignment IDs clickable in student detail view (navigates to assignment detail)
+   - Added essay detail links for viewing individual essay analysis
+   - All navigation uses TanStack Router with proper route params
+
+4. ✅ **Improved Assignment Display**:
+   - Separated assignments into two sections: "Assignments" (submitted) and "Unsubmitted Assignments"
+   - Shows essay count for each assignment
+   - Displays individual essay buttons when multiple essays exist
+   - Clear visual distinction between completed and pending assignments
+
+5. ✅ **UI Polish**:
+   - Added cursor-pointer to tabs for better UX indication
+   - Improved error handling with informative messages
+   - Better loading states and empty state messages
+
+**API Changes:**
+- Added `GET /essays/student/{student_id}` endpoint in `lambda/api/app/routes/essays.py`
+- Returns essays sorted by `created_at` (ascending - oldest first)
+- Includes essay_id, assignment_id, created_at, and metrics
+
+**Frontend Changes:**
+- Updated `frontend/src/routes/students.$studentId.tsx`:
+  - Fetches real essay data for time-series chart
+  - Separates assignments into submitted/unsubmitted sections
+  - Shows individual essay links when multiple essays exist
+- Updated `frontend/src/routes/assignments.$assignmentId.tsx`:
+  - Made student names clickable
+- Updated `frontend/src/components/ui/tabs.tsx`:
+  - Added cursor-pointer class to tabs
+
+**Files Modified:**
+- `lambda/api/app/routes/essays.py` - Added list student essays endpoint
+- `lambda/aggregations/student_metrics.py` - Updated trend calculation (2+ essays)
+- `lambda/api/app/routes/metrics.py` - Updated response model for nullable trend
+- `lib/vocab_recommendation-stack.ts` - Added API Gateway route
+- `frontend/src/types/api.ts` - Added StudentEssayResponse, updated trend to nullable
+- `frontend/src/api/client.ts` - Added listStudentEssays function
+- `frontend/src/routes/students.$studentId.tsx` - Replaced fake data, added navigation
+- `frontend/src/routes/assignments.$assignmentId.tsx` - Made student names clickable
+- `frontend/src/components/ui/tabs.tsx` - Added cursor-pointer
+
+**Impact:**
+- All data displayed is now real and accurate
+- Better user experience with clear navigation paths
+- More informative UI with proper status indicators
+- Trend analysis now works with fewer essays (2+ instead of 6+)
+
+---
+
 ## Recent Updates (2025-11-13)
 
 ### Critical Bug Fixes - Student Metrics Aggregation

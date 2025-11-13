@@ -7,8 +7,9 @@ import json
 import boto3
 import logging
 from fastapi import APIRouter, Depends, HTTPException
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from pydantic import BaseModel
+from boto3.dynamodb.conditions import Attr
 
 from app.deps import get_teacher_context, TeacherContext
 
@@ -41,6 +42,80 @@ class EssayOverrideResponse(BaseModel):
     """Response model for essay override."""
     essay_id: str
     message: str
+
+
+class StudentEssayResponse(BaseModel):
+    """Response model for a single student essay."""
+    essay_id: str
+    assignment_id: Optional[str] = None
+    created_at: str
+    metrics: Dict[str, Any]
+
+
+@router.get("/student/{student_id}", response_model=List[StudentEssayResponse])
+async def list_student_essays(
+    student_id: str,
+    teacher_ctx: TeacherContext = Depends(get_teacher_context)
+):
+    """
+    List all processed essays for a specific student.
+    
+    Returns essays sorted by created_at (ascending) with their metrics.
+    Only returns essays that belong to the authenticated teacher.
+    """
+    if not metrics_table:
+        raise HTTPException(status_code=500, detail="Metrics table not configured")
+    
+    try:
+        essays = []
+        
+        # Scan with filter to get all essays for this student
+        response = metrics_table.scan(
+            FilterExpression=Attr('teacher_id').eq(teacher_ctx.teacher_id) &
+                            Attr('student_id').eq(student_id) &
+                            Attr('status').eq('processed')
+        )
+        
+        essays.extend(response.get('Items', []))
+        
+        # Handle pagination
+        while 'LastEvaluatedKey' in response:
+            response = metrics_table.scan(
+                FilterExpression=Attr('teacher_id').eq(teacher_ctx.teacher_id) &
+                                Attr('student_id').eq(student_id) &
+                                Attr('status').eq('processed'),
+                ExclusiveStartKey=response['LastEvaluatedKey']
+            )
+            essays.extend(response.get('Items', []))
+        
+        # Sort essays by created_at (ascending)
+        essays.sort(key=lambda x: x.get('created_at', ''))
+        
+        # Format response
+        result = []
+        for essay in essays:
+            result.append(StudentEssayResponse(
+                essay_id=essay.get('essay_id'),
+                assignment_id=essay.get('assignment_id'),
+                created_at=essay.get('created_at', ''),
+                metrics=essay.get('metrics', {})
+            ))
+        
+        logger.info("Student essays retrieved", extra={
+            "teacher_id": teacher_ctx.teacher_id,
+            "student_id": student_id,
+            "essay_count": len(result),
+        })
+        
+        return result
+        
+    except Exception as e:
+        logger.error("Failed to list student essays", extra={
+            "teacher_id": teacher_ctx.teacher_id,
+            "student_id": student_id,
+            "error": str(e),
+        }, exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve student essays: {str(e)}")
 
 
 @router.patch("/{essay_id}/override", response_model=EssayOverrideResponse)

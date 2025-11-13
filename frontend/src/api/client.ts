@@ -38,6 +38,7 @@ export type {
   EssayResponse,
   ClassMetricsResponse,
   StudentMetricsResponse,
+  StudentEssayResponse,
   EssayOverrideRequest,
   EssayOverrideResponse,
   AssignmentResponse,
@@ -218,6 +219,22 @@ export async function deleteStudent(studentId: string) {
   });
   if (!response.ok) {
     throw new Error(`Failed to delete student: ${response.statusText}`);
+  }
+}
+
+export async function listStudentEssays(studentId: string) {
+  try {
+    const response = await apiRequest(`${API_BASE_URL}/essays/student/${studentId}`);
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => response.statusText);
+      throw new Error(`Failed to list student essays: ${response.status} ${errorText}`);
+    }
+    return response.json();
+  } catch (error) {
+    if (error instanceof Error) {
+      throw error;
+    }
+    throw new Error(`Failed to list student essays: ${String(error)}`);
   }
 }
 
