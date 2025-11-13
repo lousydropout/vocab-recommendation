@@ -2,7 +2,7 @@ import { Outlet, createRootRoute, useLocation } from '@tanstack/react-router'
 import { TanStackRouterDevtoolsPanel } from '@tanstack/react-router-devtools'
 import { TanStackDevtools } from '@tanstack/react-devtools'
 
-import Header from '../components/Header'
+import Sidebar from '../components/Sidebar'
 
 export const Route = createRootRoute({
   component: RootComponent,
@@ -14,8 +14,10 @@ function RootComponent() {
 
   return (
     <>
-      {!isLoginPage && <Header />}
-      <Outlet />
+      {!isLoginPage && <Sidebar />}
+      <main className={!isLoginPage ? 'lg:ml-64 min-h-screen' : ''}>
+        <Outlet />
+      </main>
       <TanStackDevtools
         config={{
           position: 'bottom-right',
