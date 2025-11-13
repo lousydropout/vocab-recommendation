@@ -437,6 +437,63 @@
    - Name extraction patterns
    - All tests passing ✅
 
+---
+
+### 🔄 Frontend Rebuild (TanStack Router + Bun) - IN PROGRESS
+
+**Status:** Epic 1 Complete, Ready for Epic 2
+
+**Goal:** Rebuild frontend using TanStack Router file-based routing, Bun build system, and migrate all features from `old_frontend/`.
+
+**Reference:** See `memory-bank/frontend-prd.md` for complete PRD.
+
+**Epic Status:**
+- ✅ **Epic 1:** Project Setup - COMPLETE
+- ⏳ **Epic 2:** Authentication System (pending approval)
+- ⏳ **Epic 3:** Layout & Navigation
+- ⏳ **Epic 4:** Students CRUD
+- ⏳ **Epic 5:** Assignments
+- ⏳ **Epic 6:** Class Analytics
+- ⏳ **Epic 7:** Student Analytics
+- ⏳ **Epic 8:** Essay Review
+- ⏳ **Epic 9:** Polish & Deployment
+
+**Epic 1 Completion Summary (2025-01-XX):**
+- ✅ Created directory structure: `api/`, `components/`, `hooks/`, `pages/`, `utils/`, `types/`
+- ✅ Added dependencies: `@tanstack/react-query@5.90.8`, `aws-amplify@6.15.8`
+- ✅ Created environment configuration (`src/utils/config.ts`) with multi-environment support
+- ✅ Created authentication utilities (`src/utils/auth.ts`) with AWS Amplify integration
+- ✅ Created API client (`src/api/client.ts`) with JWT injection and error handling
+- ✅ Created TypeScript type definitions (`src/types/api.ts`) for all API responses
+- ✅ Set up global providers: `AuthProvider` and `QueryProvider`
+- ✅ Updated `main.tsx` to wrap app with providers
+- ✅ Build verification: `bun run build` passes successfully
+- ✅ Bundle size: ~348KB (gzipped: ~110KB)
+
+**Current State:**
+- TanStack Router file-based routing scaffolded
+- React 19 + TypeScript configured
+- Tailwind CSS v4 with theme variables
+- Basic Header component with sidebar
+- Vite build system (PRD requires Bun build - decision pending)
+- Global providers configured (Auth, Query)
+- API client ready with all endpoints
+- Authentication utilities ready
+
+**Migration Source:**
+- `old_frontend/` contains complete implementation with:
+  - AWS Amplify authentication
+  - All pages (Login, Dashboard, ClassDashboard, StudentDashboard, EssayReview)
+  - Complete API client
+  - shadcn/ui components
+
+**Implementation Rules:**
+- Each epic must pass `bun run build` before completion
+- Wait for approval before proceeding to next epic
+- All TypeScript errors must be resolved
+
+---
+
 ## Next Steps
 
 1. ✅ **Stack Renamed & Redeployed**: All resources now prefixed with `vincent-vocab-`
@@ -444,10 +501,10 @@
 3. ✅ **Epic 6 (Tests):** Unit and integration tests - COMPLETE
 4. ✅ **Epic 7 (Backend):** Student/assignment management and batch uploads - COMPLETE
 5. ✅ **Epic 8 (Backend):** Analytics endpoints and override functionality - COMPLETE
-6. ✅ **Epic 8 (Frontend):** Class dashboard, student dashboard, essay review page - COMPLETE
-7. 🔄 **Frontend Migration**: Complete migration from `frontend/` to `new_frontend/` (in progress)
-8. ⏳ **Frontend Testing**: Set up and run frontend tests in `new_frontend/`
-9. ⏳ **Frontend Deployment**: Deploy `new_frontend/` to production (S3 + CloudFront, or Vercel/Netlify)
+6. ✅ **Epic 8 (Frontend - Old):** Class dashboard, student dashboard, essay review page - COMPLETE (in `old_frontend/`)
+7. 🔄 **Frontend Rebuild (New):** TanStack Router + Bun version - IN PROGRESS (Epic 1 Complete, Epic 2 Pending)
+8. ⏳ **Frontend Testing**: Set up and run frontend tests in new frontend
+9. ⏳ **Frontend Deployment**: Deploy new frontend to production (S3 + CloudFront, or Vercel/Netlify)
 10. Configure SNS topic subscriptions (email, Slack, etc.) for alarm notifications
 11. Monitor CloudWatch Logs to verify structured logging is working
 

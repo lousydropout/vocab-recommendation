@@ -13,6 +13,8 @@ This directory contains project knowledge, architecture decisions, and implement
 - `task-list.md` - Development task list organized by epic
 - `progress.md` - Project progress tracking and epic completion status
 - `epic2-summary.md` - Detailed summary of Epic 2 implementation
+- `epic6_8_tasks.md` - Detailed task breakdown for Epics 6-8
+- `frontend-prd.md` - Frontend PRD for TanStack Router + Bun version
 
 ## Purpose
 
