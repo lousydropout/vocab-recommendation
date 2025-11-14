@@ -273,6 +273,8 @@ export class VocabRecommendationStack extends cdk.Stack {
         COGNITO_USER_POOL_ID: userPool.userPoolId,
         COGNITO_USER_POOL_CLIENT_ID: userPoolClient.userPoolClientId,
         COGNITO_REGION: this.region,
+        // OPENAI_API_KEY from environment variable (set during deployment)
+        OPENAI_API_KEY: process.env.OPENAI_API_KEY || '',
       },
     });
 
@@ -305,12 +307,14 @@ export class VocabRecommendationStack extends cdk.Stack {
         STUDENTS_TABLE: studentsTable.tableName,
         ASSIGNMENTS_TABLE: assignmentsTable.tableName,
         ESSAYS_BUCKET: essaysBucket.bucketName,
+        METRICS_TABLE: metricsTable.tableName,
       },
     });
 
     // Grant additional permissions for S3 Upload Lambda (Epic 7)
     studentsTable.grantReadWriteData(s3UploadLambdaRole);
     assignmentsTable.grantReadData(s3UploadLambdaRole);
+    metricsTable.grantReadData(s3UploadLambdaRole); // For reading teacher_id from legacy essays
 
     // S3 Event Notification - trigger Lambda on object creation
     // Process both essays/ prefix (single essays) and teacher_id/assignments/ prefix (batch uploads)
@@ -355,13 +359,13 @@ export class VocabRecommendationStack extends cdk.Stack {
       authorizationType: apigateway.AuthorizationType.COGNITO,
     };
 
-    // POST /essay endpoint (protected)
+    // POST /essay endpoint (public - legacy essay upload)
     const essayResource = api.root.addResource('essay');
-    essayResource.addMethod('POST', apiIntegration, authorizerOptions);
+    essayResource.addMethod('POST', apiIntegration); // No authorizer - public endpoint
 
-    // GET /essay/{essay_id} endpoint (protected)
+    // GET /essay/{essay_id} endpoint (public - legacy essay retrieval)
     const essayIdResource = essayResource.addResource('{essay_id}');
-    essayIdResource.addMethod('GET', apiIntegration, authorizerOptions);
+    essayIdResource.addMethod('GET', apiIntegration); // No authorizer - public endpoint
 
     // Students endpoints (protected) - Epic 7
     const studentsResource = api.root.addResource('students');

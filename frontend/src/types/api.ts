@@ -1,11 +1,19 @@
 // API Type Definitions
 
+export interface VocabularyAnalysis {
+  correctness_review: string;
+  vocabulary_used: string[];
+  recommended_vocabulary: string[];
+}
+
 export interface EssayResponse {
   essay_id: string;
   status: "awaiting_processing" | "processing" | "processed";
   file_key?: string;
   presigned_url?: string;
   expires_in?: number;
+  vocabulary_analysis?: VocabularyAnalysis;
+  // Legacy fields (for teacher version)
   metrics?: {
     word_count: number;
     unique_words: number;

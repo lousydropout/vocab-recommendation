@@ -31,8 +31,8 @@ function Login() {
       if (result.isSignedIn) {
         // Refresh auth state
         await checkAuth()
-        // Redirect to home page after successful login
-        navigate({ to: '/' })
+        // Redirect to dashboard after successful login
+        navigate({ to: '/dashboard' })
       } else {
         // Handle challenge (e.g., new password required)
         setError('Additional authentication required. Please check your email.')

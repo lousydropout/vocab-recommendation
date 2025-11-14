@@ -11,11 +11,13 @@ export const Route = createRootRoute({
 function RootComponent() {
   const location = useLocation()
   const isLoginPage = location.pathname === '/login'
+  const isHomePage = location.pathname === '/'
+  const shouldShowSidebar = !isLoginPage && !isHomePage
 
   return (
     <>
-      {!isLoginPage && <Sidebar />}
-      <main className={!isLoginPage ? 'lg:ml-64 min-h-screen' : ''}>
+      {shouldShowSidebar && <Sidebar />}
+      <main className={shouldShowSidebar ? 'lg:ml-64 min-h-screen' : ''}>
         <Outlet />
       </main>
       <TanStackDevtools

@@ -273,11 +273,25 @@ def handler(event, context):
                     # Extract essay_id from key: essays/{essay_id}.txt
                     essay_id = file_name  # Already extracted in parse_s3_key
                     
-                    # Create SQS message with existing essay_id
+                    # Try to get teacher_id from DynamoDB (should be "LEGACY" for public uploads)
+                    teacher_id = "LEGACY"  # Default for legacy essays
+                    try:
+                        metrics_table = dynamodb.Table(os.environ.get('METRICS_TABLE', 'VincentVocabEssayMetrics'))
+                        response = metrics_table.get_item(Key={'essay_id': essay_id})
+                        if 'Item' in response:
+                            teacher_id = response['Item'].get('teacher_id', 'LEGACY')
+                    except Exception as e:
+                        logger.warning("Failed to get teacher_id from DynamoDB, using LEGACY", extra={
+                            "essay_id": essay_id,
+                            "error": str(e),
+                        })
+                    
+                    # Create SQS message with existing essay_id and teacher_id
                     message_body = {
                         'essay_id': essay_id,
                         'file_key': key,
                         'bucket': bucket,
+                        'teacher_id': teacher_id,
                     }
                     
                     # Send message to SQS

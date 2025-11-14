@@ -72,31 +72,52 @@ export async function checkAuthHealth(): Promise<{
   return response.json();
 }
 
-// Essay endpoints
+// Essay endpoints (public - work without authentication)
 export async function uploadEssay(essayText: string) {
-  const response = await apiRequest(`${API_BASE_URL}/essay`, {
-    method: "POST",
-    body: JSON.stringify({ essay_text: essayText }),
-  });
+  // Make request without auth token for legacy essays
+  try {
+    const response = await fetch(`${API_BASE_URL}/essay`, {
+      method: "POST",
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ essay_text: essayText }),
+    });
 
-  if (!response.ok) {
-    throw new Error(`Failed to upload essay: ${response.statusText}`);
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => response.statusText);
+      throw new Error(`Failed to upload essay: ${response.status} ${errorText}`);
+    }
+
+    return response.json();
+  } catch (error) {
+    if (error instanceof TypeError && error.message.includes('fetch')) {
+      throw new Error(`Network error: Unable to reach the API. Please check your connection and API URL: ${API_BASE_URL}`);
+    }
+    throw error;
   }
-
-  return response.json();
 }
 
 export async function getEssay(essayId: string) {
-  const response = await apiRequest(`${API_BASE_URL}/essay/${essayId}`);
+  // Make request without auth token for legacy essays
+  try {
+    const response = await fetch(`${API_BASE_URL}/essay/${essayId}`);
 
-  if (!response.ok) {
-    if (response.status === 404) {
-      throw new Error("Essay not found");
+    if (!response.ok) {
+      if (response.status === 404) {
+        throw new Error("Essay not found");
+      }
+      const errorText = await response.text().catch(() => response.statusText);
+      throw new Error(`Failed to fetch essay: ${response.status} ${errorText}`);
     }
-    throw new Error(`Failed to fetch essay: ${response.statusText}`);
-  }
 
-  return response.json();
+    return response.json();
+  } catch (error) {
+    if (error instanceof TypeError && error.message.includes('fetch')) {
+      throw new Error(`Network error: Unable to reach the API. Please check your connection and API URL: ${API_BASE_URL}`);
+    }
+    throw error;
+  }
 }
 
 // Metrics endpoints
