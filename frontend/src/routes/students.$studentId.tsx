@@ -31,7 +31,7 @@ function StudentDetailPage() {
     enabled: !!studentId,
   })
 
-  const { data: essays, isLoading: essaysLoading, error: essaysError } = useQuery<StudentEssayResponse[]>({
+  const { data: essays, isLoading: essaysLoading } = useQuery<StudentEssayResponse[]>({
     queryKey: ['student-essays', studentId],
     queryFn: () => listStudentEssays(studentId),
     enabled: !!studentId,
