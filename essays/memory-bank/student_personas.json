@@ -1,0 +1,215 @@
+{
+  "essay_format_note": "Essays should be generated as .txt documents in the following format:\n\n<FirstName> <LastName>\n\n<SubmissionDate in MM/DD/YYYY format>\n\n\n\n<Title> (optional)\n\n\n\n<EssayBody>",
+  "personas": [
+    {
+      "id": 1,
+      "name": "Maya Thompson",
+      "gender": "girl",
+      "personality": ["shy", "thoughtful", "overthinks"],
+      "interests": ["baking", "graphic novels", "cats"],
+      "strong_subject": "English",
+      "weak_subject": "Math",
+      "writing_quirks": [
+        "careful sentences",
+        "repeats when nervous",
+        "metaphors involving food or cats"
+      ]
+    },
+    {
+      "id": 2,
+      "name": "Liam Rodriguez",
+      "gender": "boy",
+      "personality": ["confident", "quick thinker"],
+      "interests": ["FPS games", "soccer", "tech gadgets"],
+      "strong_subject": "Science",
+      "weak_subject": "English grammar",
+      "writing_quirks": [
+        "short punchy sentences",
+        "gaming terminology slips in"
+      ]
+    },
+    {
+      "id": 3,
+      "name": "Ava Kim",
+      "gender": "girl",
+      "personality": ["artistic", "dreamy", "easily distracted"],
+      "interests": ["watercolor painting", "K-pop", "astronomy"],
+      "strong_subject": "English",
+      "weak_subject": "History",
+      "writing_quirks": [
+        "flowery descriptions",
+        "cosmic metaphors",
+        "sometimes loses topic mid-paragraph"
+      ]
+    },
+    {
+      "id": 4,
+      "name": "Noah Patel",
+      "gender": "boy",
+      "personality": ["analytical", "literal-minded"],
+      "interests": ["math puzzles", "robotics", "chess"],
+      "strong_subject": "Math",
+      "weak_subject": "Creative writing",
+      "writing_quirks": [
+        "lab-report style writing",
+        "overuses 'therefore' and 'consequently'"
+      ]
+    },
+    {
+      "id": 5,
+      "name": "Chloe Martinez",
+      "gender": "girl",
+      "personality": ["dramatic", "extroverted", "sarcastic"],
+      "interests": ["fashion", "TikTok dances", "school gossip"],
+      "strong_subject": "Social studies",
+      "weak_subject": "Science",
+      "writing_quirks": [
+        "exaggerated statements",
+        "frequent 'literally'",
+        "run-on sentences"
+      ]
+    },
+    {
+      "id": 6,
+      "name": "Ethan Greene",
+      "gender": "boy",
+      "personality": ["quiet", "empathetic"],
+      "interests": ["dogs", "nature walks", "piano"],
+      "strong_subject": "English",
+      "weak_subject": "PE",
+      "writing_quirks": [
+        "gentle reflective tone",
+        "strong sensory details",
+        "apologizes in-writing"
+      ]
+    },
+    {
+      "id": 7,
+      "name": "Zoe Carter",
+      "gender": "girl",
+      "personality": ["competitive", "confident"],
+      "interests": ["softball", "mystery novels", "baking"],
+      "strong_subject": "Science",
+      "weak_subject": "English spelling",
+      "writing_quirks": [
+        "sports analogies",
+        "inconsistent spelling",
+        "very assertive tone"
+      ]
+    },
+    {
+      "id": 8,
+      "name": "Marcus Johnson",
+      "gender": "boy",
+      "personality": ["class clown", "high-energy"],
+      "interests": ["comedy", "YouTube", "basketball"],
+      "strong_subject": "PE",
+      "weak_subject": "Organization",
+      "writing_quirks": [
+        "jokes mid-sentence",
+        "messy structure",
+        "random capitalizations"
+      ]
+    },
+    {
+      "id": 9,
+      "name": "Emily Nguyen",
+      "gender": "girl",
+      "personality": ["studious", "perfectionist", "anxious"],
+      "interests": ["violin", "math competitions", "anime"],
+      "strong_subject": "Math",
+      "weak_subject": "Art",
+      "writing_quirks": [
+        "overly formal",
+        "safe vocabulary",
+        "very organized structure"
+      ]
+    },
+    {
+      "id": 10,
+      "name": "Jackson Brooks",
+      "gender": "boy",
+      "nickname": "Jax",
+      "personality": ["rebellious", "clever"],
+      "interests": ["skateboarding", "punk music", "dystopian novels"],
+      "strong_subject": "English",
+      "weak_subject": "Science",
+      "writing_quirks": [
+        "edgy tone",
+        "dramatic contrasts",
+        "short sentence fragments for effect"
+      ]
+    },
+    {
+      "id": 11,
+      "name": "Sofia López",
+      "gender": "girl",
+      "personality": ["bubbly", "optimistic"],
+      "interests": ["baking cookies", "dogs", "rom-coms"],
+      "strong_subject": "English",
+      "weak_subject": "Math",
+      "writing_quirks": [
+        "many exclamation marks",
+        "cheerful phrasing",
+        "sentimental conclusions"
+      ]
+    },
+    {
+      "id": 12,
+      "name": "Henry Walsh",
+      "gender": "boy",
+      "personality": ["old-soul", "formal"],
+      "interests": ["history documentaries", "coin collecting", "model trains"],
+      "strong_subject": "History",
+      "weak_subject": "Creative writing",
+      "writing_quirks": [
+        "tiny-professor tone",
+        "defines terms before using them",
+        "rigid structure"
+      ]
+    },
+    {
+      "id": 13,
+      "name": "Aria Hassan",
+      "gender": "girl",
+      "personality": ["curious", "tired", "overcommitted"],
+      "interests": ["astronomy club", "robotics", "science fiction"],
+      "strong_subject": "Science",
+      "weak_subject": "Social studies",
+      "writing_quirks": [
+        "adds random factual asides",
+        "long winding sentences",
+        "overexplains concepts"
+      ]
+    },
+    {
+      "id": 14,
+      "name": "Dylan Cooper",
+      "gender": "boy",
+      "personality": ["anxious", "self-critical"],
+      "interests": ["MMORPGs", "fantasy lore", "fanfiction"],
+      "strong_subject": "English",
+      "weak_subject": "Math",
+      "writing_quirks": [
+        "fantasy metaphors",
+        "occasional game terminology",
+        "elaborate analogies"
+      ]
+    },
+    {
+      "id": 15,
+      "name": "Natalie Reyes",
+      "gender": "girl",
+      "personality": ["organized", "dependable"],
+      "interests": ["volleyball", "bullet journaling", "Disney movies"],
+      "strong_subject": "English",
+      "weak_subject": "Science labs",
+      "writing_quirks": [
+        "highly structured paragraphs",
+        "overuses transition words",
+        "moral-lesson endings"
+      ]
+    }
+  ]
+}
+

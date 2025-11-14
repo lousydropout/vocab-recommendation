@@ -1,0 +1,318 @@
+{
+  "note": "Guidelines for generating essays that match each student's writing style",
+  "students": [
+    {
+      "id": 1,
+      "name": "Maya Thompson",
+      "run_on_sentences": {
+        "frequency": "rare",
+        "expected_count": "0-1 per essay",
+        "notes": "Careful sentences, but may have occasional run-ons when nervous"
+      },
+      "word_count": {
+        "target": 450,
+        "range": "400-500 words",
+        "notes": "Thoughtful and careful, tends to be slightly above average length"
+      },
+      "vocabulary": {
+        "size": "above_average",
+        "preference": "careful_use",
+        "notes": "Knows good vocabulary but uses it carefully and thoughtfully, doesn't show off. Strong in English but shy personality means she doesn't flaunt her knowledge."
+      }
+    },
+    {
+      "id": 2,
+      "name": "Liam Rodriguez",
+      "run_on_sentences": {
+        "frequency": "none",
+        "expected_count": "0 per essay",
+        "notes": "Short punchy sentences - avoids run-ons"
+      },
+      "word_count": {
+        "target": 400,
+        "range": "350-450 words",
+        "notes": "Quick thinker, concise writing style"
+      },
+      "vocabulary": {
+        "size": "average",
+        "preference": "natural_use",
+        "notes": "Average vocabulary, uses words naturally without trying to show off. Weak in English grammar means he doesn't overthink word choice."
+      }
+    },
+    {
+      "id": 3,
+      "name": "Ava Kim",
+      "run_on_sentences": {
+        "frequency": "rare",
+        "expected_count": "0-1 per essay",
+        "notes": "May drift into run-ons when easily distracted or losing topic"
+      },
+      "word_count": {
+        "target": 500,
+        "range": "450-550 words",
+        "notes": "Flowery descriptions and cosmic metaphors add length"
+      },
+      "vocabulary": {
+        "size": "above_average",
+        "preference": "natural_flowery_use",
+        "notes": "Knows good vocabulary and uses it naturally in flowery descriptions. Artistic and dreamy personality means she naturally gravitates toward descriptive, poetic words."
+      }
+    },
+    {
+      "id": 4,
+      "name": "Noah Patel",
+      "run_on_sentences": {
+        "frequency": "none",
+        "expected_count": "0 per essay",
+        "notes": "Lab-report style writing is structured and avoids run-ons"
+      },
+      "word_count": {
+        "target": 450,
+        "range": "400-500 words",
+        "notes": "Analytical and literal-minded, stays close to average"
+      },
+      "vocabulary": {
+        "size": "above_average_technical",
+        "preference": "misuse_when_creative",
+        "notes": "Knows technical/analytical vocabulary well but weak in creative writing. May misuse descriptive or creative words when trying to be expressive (e.g., using 'utilize' when 'use' is better, or misusing creative adjectives)."
+      }
+    },
+    {
+      "id": 5,
+      "name": "Chloe Martinez",
+      "run_on_sentences": {
+        "frequency": "frequent",
+        "expected_count": "2-4 per essay",
+        "notes": "Explicitly has 'run-on sentences' in writing quirks, dramatic and extroverted"
+      },
+      "word_count": {
+        "target": 500,
+        "range": "450-550 words",
+        "notes": "Dramatic and extroverted, tends to write longer with exaggerated statements"
+      },
+      "vocabulary": {
+        "size": "average_to_above",
+        "preference": "show_off_with_occasional_misuse",
+        "notes": "Tries to use big words to show off (dramatic, extroverted personality). May misuse words occasionally (1-2 per essay) - uses words that sound impressive but aren't quite right for the context."
+      }
+    },
+    {
+      "id": 6,
+      "name": "Ethan Greene",
+      "run_on_sentences": {
+        "frequency": "none",
+        "expected_count": "0 per essay",
+        "notes": "Gentle reflective tone, careful writing"
+      },
+      "word_count": {
+        "target": 480,
+        "range": "430-530 words",
+        "notes": "Reflective with strong sensory details, slightly above average"
+      },
+      "vocabulary": {
+        "size": "above_average",
+        "preference": "careful_use",
+        "notes": "Knows good vocabulary but uses it carefully and thoughtfully. Quiet, empathetic personality means he doesn't show off but naturally uses appropriate descriptive words for sensory details."
+      }
+    },
+    {
+      "id": 7,
+      "name": "Zoe Carter",
+      "run_on_sentences": {
+        "frequency": "none",
+        "expected_count": "0 per essay",
+        "notes": "Assertive tone, confident writing style"
+      },
+      "word_count": {
+        "target": 420,
+        "range": "370-470 words",
+        "notes": "Competitive and confident, tends to be direct and concise"
+      },
+      "vocabulary": {
+        "size": "above_average",
+        "preference": "use_with_spelling_errors",
+        "notes": "Knows good vocabulary and isn't afraid to use it, but weak in spelling means she may misspell bigger words (1-2 per essay). Confident enough to try words but spelling weakness shows through."
+      }
+    },
+    {
+      "id": 8,
+      "name": "Marcus Johnson",
+      "run_on_sentences": {
+        "frequency": "occasional",
+        "expected_count": "2-3 per essay",
+        "notes": "Messy structure, high-energy class clown - rushes and creates run-ons"
+      },
+      "word_count": {
+        "target": 450,
+        "range": "350-550 words",
+        "notes": "Messy structure means wide variation, but averages around target"
+      },
+      "vocabulary": {
+        "size": "average",
+        "preference": "casual_use",
+        "notes": "Average vocabulary, uses casual language. Class clown, high-energy personality means he doesn't try to show off with big words - keeps it simple and conversational."
+      }
+    },
+    {
+      "id": 9,
+      "name": "Emily Nguyen",
+      "run_on_sentences": {
+        "frequency": "none",
+        "expected_count": "0 per essay",
+        "notes": "Very organized structure, perfectionist - avoids run-ons"
+      },
+      "word_count": {
+        "target": 450,
+        "range": "400-500 words",
+        "notes": "Perfectionist and organized, stays close to average"
+      },
+      "vocabulary": {
+        "size": "extensive",
+        "preference": "safe_avoidance",
+        "notes": "Knows extensive vocabulary (studious, perfectionist) but deliberately uses 'safe vocabulary' to avoid mistakes. Anxious personality means she prefers simpler, safer words she's certain about rather than risking errors with advanced vocabulary."
+      }
+    },
+    {
+      "id": 10,
+      "name": "Jackson Brooks",
+      "run_on_sentences": {
+        "frequency": "none",
+        "expected_count": "0 per essay",
+        "notes": "Uses short sentence fragments for effect - avoids run-ons"
+      },
+      "word_count": {
+        "target": 400,
+        "range": "350-450 words",
+        "notes": "Edgy tone with dramatic contrasts, tends to be concise"
+      },
+      "vocabulary": {
+        "size": "above_average",
+        "preference": "effective_edgy_use",
+        "notes": "Knows good vocabulary and uses it effectively. Rebellious, clever personality means he chooses words carefully for dramatic effect and edgy tone. May use some unusual or edgy word choices."
+      }
+    },
+    {
+      "id": 11,
+      "name": "Sofia López",
+      "run_on_sentences": {
+        "frequency": "none",
+        "expected_count": "0 per essay",
+        "notes": "Bubbly and optimistic, but maintains sentence structure"
+      },
+      "word_count": {
+        "target": 480,
+        "range": "430-530 words",
+        "notes": "Cheerful phrasing and sentimental conclusions add length"
+      },
+      "vocabulary": {
+        "size": "average",
+        "preference": "simple_cheerful_use",
+        "notes": "Average vocabulary, uses simple, cheerful words. Bubbly, optimistic personality means she prefers accessible, positive language over complex vocabulary."
+      }
+    },
+    {
+      "id": 12,
+      "name": "Henry Walsh",
+      "run_on_sentences": {
+        "frequency": "none",
+        "expected_count": "0 per essay",
+        "notes": "Rigid structure, formal writing - avoids run-ons"
+      },
+      "word_count": {
+        "target": 470,
+        "range": "420-520 words",
+        "notes": "Tiny-professor tone with definitions, slightly above average"
+      },
+      "vocabulary": {
+        "size": "extensive",
+        "preference": "formal_show_off",
+        "notes": "Knows extensive vocabulary and shows it off. Old-soul, formal personality means he uses advanced, formal words and defines terms before using them. Loves demonstrating his vocabulary knowledge."
+      }
+    },
+    {
+      "id": 13,
+      "name": "Aria Hassan",
+      "run_on_sentences": {
+        "frequency": "occasional",
+        "expected_count": "1-2 per essay",
+        "notes": "Long winding sentences and overexplains - can become run-ons"
+      },
+      "word_count": {
+        "target": 520,
+        "range": "470-570 words",
+        "notes": "Overexplains concepts and adds factual asides, tends to be longer"
+      },
+      "vocabulary": {
+        "size": "extensive_technical",
+        "preference": "natural_technical_use",
+        "notes": "Knows extensive vocabulary, especially technical/scientific terms. Curious, overcommitted personality means she naturally uses advanced vocabulary when overexplaining concepts. Uses technical words correctly."
+      }
+    },
+    {
+      "id": 14,
+      "name": "Dylan Cooper",
+      "run_on_sentences": {
+        "frequency": "none",
+        "expected_count": "0 per essay",
+        "notes": "Elaborate analogies but maintains structure"
+      },
+      "word_count": {
+        "target": 480,
+        "range": "430-530 words",
+        "notes": "Elaborate analogies and fantasy metaphors add length"
+      },
+      "vocabulary": {
+        "size": "above_average",
+        "preference": "elaborate_use",
+        "notes": "Knows good vocabulary and uses it in elaborate analogies. Anxious, self-critical personality means he thinks carefully about word choice for his fantasy metaphors and elaborate comparisons."
+      }
+    },
+    {
+      "id": 15,
+      "name": "Natalie Reyes",
+      "run_on_sentences": {
+        "frequency": "none",
+        "expected_count": "0 per essay",
+        "notes": "Highly structured paragraphs, organized - avoids run-ons"
+      },
+      "word_count": {
+        "target": 450,
+        "range": "400-500 words",
+        "notes": "Organized and dependable, stays close to average"
+      },
+      "vocabulary": {
+        "size": "average",
+        "preference": "correct_use",
+        "notes": "Average vocabulary, uses words correctly but not showy. Organized, dependable personality means she uses appropriate vocabulary without trying to impress or show off."
+      }
+    }
+  ],
+  "general_notes": {
+    "average_word_count": 450,
+    "expected_range": "300-550 words",
+    "margin_of_error": "20% when generating",
+    "run_on_sentence_types": [
+      "Comma splices connecting independent clauses",
+      "Long sentences without proper punctuation",
+      "Stream-of-consciousness style when distracted or rushed"
+    ],
+    "vocabulary_categories": {
+      "extensive": ["Emily Nguyen", "Henry Walsh", "Aria Hassan"],
+      "above_average": ["Maya Thompson", "Ava Kim", "Ethan Greene", "Zoe Carter", "Jackson Brooks", "Dylan Cooper"],
+      "above_average_technical": ["Noah Patel"],
+      "average": ["Liam Rodriguez", "Marcus Johnson", "Sofia López", "Natalie Reyes"],
+      "average_to_above": ["Chloe Martinez"]
+    },
+    "vocabulary_preference_categories": {
+      "show_off": ["Chloe Martinez (with misuse)", "Henry Walsh (formal)"],
+      "careful_use": ["Maya Thompson", "Ethan Greene"],
+      "natural_use": ["Liam Rodriguez", "Ava Kim (flowery)", "Aria Hassan (technical)", "Dylan Cooper (elaborate)"],
+      "safe_avoidance": ["Emily Nguyen"],
+      "misuse": ["Chloe Martinez (occasional)", "Noah Patel (when creative)"],
+      "spelling_errors": ["Zoe Carter"],
+      "casual_simple": ["Marcus Johnson", "Sofia López", "Natalie Reyes"],
+      "effective_edgy": ["Jackson Brooks"]
+    }
+  }
+}
+

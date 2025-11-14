@@ -1,0 +1,12 @@
+{
+  "note": "Each prompt entry should contain: id (number), prompt_text (string), created_date (YYYY-MM-DD), essay_directory (string path)",
+  "prompts": [
+    {
+      "id": 1,
+      "prompt_text": "Embarrassing Pasts - As people get older, they are sometimes embarrassed by things they used to like, such as toys, television shows, or nicknames. Describe something that you used to enjoy that you now find embarrassing. Why is it embarrassing now?",
+      "created_date": "2025-11-13",
+      "essay_directory": "essays/prompt_1_2025-11-13"
+    }
+  ]
+}
+

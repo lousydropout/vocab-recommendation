@@ -1,0 +1,81 @@
+{
+  "note": "Records thesis statements for each essay by prompt_id and student name",
+  "essays": [
+    {
+      "prompt_id": 1,
+      "student_name": "Maya Thompson",
+      "thesis_statement": "I used to be obsessed with a cartoon cat show, and it's embarrassing now because everyone knows about it, I was too serious about it, and I still can't let go of the stuffed animal, which shows I'm supposed to be more mature now."
+    },
+    {
+      "prompt_id": 1,
+      "student_name": "Liam Rodriguez",
+      "thesis_statement": "I used to sleep with a stuffed bear named Buzzy every night, and it's embarrassing now because I'm thirteen and it's not cool, my brother teases me about it, and I was way too attached to it."
+    },
+    {
+      "prompt_id": 1,
+      "student_name": "Ava Kim",
+      "thesis_statement": "I used to be obsessed with a sparkly unicorn show and wanted to be a unicorn, and it's embarrassing now because it was childish, I had a whole collection and talked to the toys, and there are embarrassing videos of me doing unicorn dances."
+    },
+    {
+      "prompt_id": 1,
+      "student_name": "Noah Patel",
+      "thesis_statement": "I was obsessed with an educational kids' show about numbers and treated it like serious mathematics, and it's embarrassing now because I realize how childish it was, I had a whole system with charts and organized my toys, and my brother still makes fun of me about it."
+    },
+    {
+      "prompt_id": 1,
+      "student_name": "Chloe Martinez",
+      "thesis_statement": "I was literally obsessed with being a princess and made everyone call me 'Princess Chloe,' and it's embarrassing now because I realize how ridiculous it was, I was so dramatic about it with tantrums and speeches, and my sister still brings it up."
+    },
+    {
+      "prompt_id": 1,
+      "student_name": "Ethan Greene",
+      "thesis_statement": "I had a stuffed dog named Buster that I treated like he was real, and it's embarrassing now because I realize how much I depended on him, I would pretend he was real with water bowls and walks, and I still have him hidden in my closet."
+    },
+    {
+      "prompt_id": 1,
+      "student_name": "Zoe Carter",
+      "thesis_statement": "I was completely obsessed with a kids' detective cat show and treated it like it was sophisticated, and it's embarrassing now because I realize how ridiculous that was, I would argue competitively about it, and I still remember all the episodes."
+    },
+    {
+      "prompt_id": 1,
+      "student_name": "Marcus Johnson",
+      "thesis_statement": "I was totally obsessed with a superhero show and pretended to be Captain Awesome, and it's embarrassing now because I realize how cringe that was, I would do it in public and correct people who didn't use my superhero name, and my mom still has the cape."
+    },
+    {
+      "prompt_id": 1,
+      "student_name": "Emily Nguyen",
+      "thesis_statement": "I was very interested in a cartoon show when I was younger, and it is embarrassing now because I realize the show was designed for much younger children, I was very serious about it and would get upset if someone did not like it, and my parents have videos of me pretending to be one of the characters."
+    },
+    {
+      "prompt_id": 1,
+      "student_name": "Jackson Brooks",
+      "thesis_statement": "I was obsessed with a mainstream kids' show and thought it was cool, and it's embarrassing now because I realize how fake it was, I would defend it and thought I was being unique but I was just following the crowd, and my brother still makes fun of me about it."
+    },
+    {
+      "prompt_id": 1,
+      "student_name": "Sofia López",
+      "thesis_statement": "I was totally obsessed with being a princess and had princess everything, and it's embarrassing now because I realize how silly that was, I would make everyone call me 'Princess Sofia' and do princess dances, and my mom has videos of me doing it."
+    },
+    {
+      "prompt_id": 1,
+      "student_name": "Henry Walsh",
+      "thesis_statement": "I was quite interested in an educational program designed for much younger children, and it is embarrassing now because I realize the program was age-appropriate for five or six year olds, I was very serious about it and would correct people, and my parents have recordings of me explaining concepts to my stuffed animals."
+    },
+    {
+      "prompt_id": 1,
+      "student_name": "Aria Hassan",
+      "thesis_statement": "I was completely obsessed with an educational science show designed for little kids, and it's embarrassing now because I realize the scientific concepts were very basic, I was so serious about it and would correct people, and my parents have videos of me explaining concepts to my stuffed animals."
+    },
+    {
+      "prompt_id": 1,
+      "student_name": "Dylan Cooper",
+      "thesis_statement": "I was completely obsessed with a fantasy cartoon show and thought it was the most epic story ever, and it's embarrassing now because I realize the story was very simple, I was so serious about it and would defend it, and my parents have videos of me doing 'quests' around the house."
+    },
+    {
+      "prompt_id": 1,
+      "student_name": "Natalie Reyes",
+      "thesis_statement": "I was completely obsessed with Disney movies and thought they were the best thing ever, and it is embarrassing now because I realize the movies were designed for little kids, I was so serious about it and would correct people, and my parents have videos of me doing Disney character impressions."
+    }
+  ]
+}
+
