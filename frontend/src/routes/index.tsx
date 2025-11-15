@@ -5,6 +5,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../co
 import { Button } from '../components/ui/button'
 import { Textarea } from '../components/ui/textarea'
 import { Alert, AlertDescription } from '../components/ui/alert'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../components/ui/select'
 import { Loader2, CheckCircle2, XCircle, LogIn, BookOpen } from 'lucide-react'
 import type { EssayResponse } from '../types/api'
 
@@ -12,12 +19,33 @@ export const Route = createFileRoute('/')({
   component: HomePage,
 })
 
+// Available example essays
+const EXAMPLE_ESSAYS = [
+  { filename: 'Brooks_Jackson.txt', displayName: 'Essay 1 - Brooks Jackson' },
+  { filename: 'Carter_Zoe.txt', displayName: 'Essay 2 - Carter Zoe' },
+  { filename: 'Cooper_Dylan.txt', displayName: 'Essay 3 - Cooper Dylan' },
+  { filename: 'Greene_Ethan.txt', displayName: 'Essay 4 - Greene Ethan' },
+  { filename: 'Hassan_Aria.txt', displayName: 'Essay 5 - Hassan Aria' },
+  { filename: 'Johnson_Marcus.txt', displayName: 'Essay 6 - Johnson Marcus' },
+  { filename: 'Kim_Ava.txt', displayName: 'Essay 7 - Kim Ava' },
+  { filename: 'Lopez_Sofia.txt', displayName: 'Essay 8 - Lopez Sofia' },
+  { filename: 'Martinez_Chloe.txt', displayName: 'Essay 9 - Martinez Chloe' },
+  { filename: 'Nguyen_Emily.txt', displayName: 'Essay 10 - Nguyen Emily' },
+  { filename: 'Patel_Noah.txt', displayName: 'Essay 11 - Patel Noah' },
+  { filename: 'Reyes_Natalie.txt', displayName: 'Essay 12 - Reyes Natalie' },
+  { filename: 'Rodriguez_Liam.txt', displayName: 'Essay 13 - Rodriguez Liam' },
+  { filename: 'Thompson_Maya.txt', displayName: 'Essay 14 - Thompson Maya' },
+  { filename: 'Walsh_Henry.txt', displayName: 'Essay 15 - Walsh Henry' },
+]
+
 function HomePage() {
   const [essayText, setEssayText] = useState('')
   const [status, setStatus] = useState<'idle' | 'uploading' | 'processing' | 'completed' | 'error'>('idle')
   const [essay, setEssay] = useState<EssayResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [pollingInterval, setPollingInterval] = useState<NodeJS.Timeout | null>(null)
+  const [selectedEssay, setSelectedEssay] = useState<string>('none')
+  const [isLoadingEssay, setIsLoadingEssay] = useState(false)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -83,10 +111,44 @@ function HomePage() {
     setStatus('idle')
     setEssay(null)
     setError(null)
+    setSelectedEssay('none')
     if (pollingInterval) {
       clearInterval(pollingInterval)
       setPollingInterval(null)
     }
+  }
+
+  const loadEssay = async (filename: string) => {
+    if (filename === 'none') {
+      setEssayText('')
+      setSelectedEssay('none')
+      setError(null)
+      return
+    }
+
+    setIsLoadingEssay(true)
+    setError(null)
+    try {
+      const response = await fetch(`/essays/${filename}`)
+      if (!response.ok) {
+        throw new Error(`Failed to load essay: ${response.statusText}`)
+      }
+      const text = await response.text()
+      setEssayText(text)
+      setSelectedEssay(filename)
+      // Reset status when loading a new essay
+      setStatus('idle')
+      setEssay(null)
+    } catch (err: any) {
+      setError(err.message || 'Failed to load essay')
+      setSelectedEssay('none')
+    } finally {
+      setIsLoadingEssay(false)
+    }
+  }
+
+  const handleEssaySelect = (value: string) => {
+    loadEssay(value)
   }
 
   return (
@@ -121,12 +183,40 @@ function HomePage() {
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="space-y-2">
+                <label htmlFor="essay-select" className="text-sm font-medium">
+                  Load Example Essay (Optional)
+                </label>
+                <Select
+                  value={selectedEssay}
+                  onValueChange={handleEssaySelect}
+                  disabled={status === 'uploading' || status === 'processing' || isLoadingEssay}
+                >
+                  <SelectTrigger id="essay-select">
+                    <SelectValue placeholder="Select an example essay..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">None</SelectItem>
+                    {EXAMPLE_ESSAYS.map((essay) => (
+                      <SelectItem key={essay.filename} value={essay.filename}>
+                        {essay.displayName}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
               <Textarea
                 value={essayText}
-                onChange={(e) => setEssayText(e.target.value)}
-                placeholder="Paste your essay here..."
+                onChange={(e) => {
+                  setEssayText(e.target.value)
+                  // Clear selection if user manually edits
+                  if (selectedEssay !== 'none') {
+                    setSelectedEssay('none')
+                  }
+                }}
+                placeholder="Paste your essay here or select an example essay above..."
                 rows={12}
-                disabled={status === 'uploading' || status === 'processing'}
+                disabled={status === 'uploading' || status === 'processing' || isLoadingEssay}
                 className="font-mono text-sm"
               />
               
