@@ -30,9 +30,23 @@ const TOKEN_KEY = 'cognito_id_token';
 
 /**
  * Sign in with email and password
+ * Automatically signs out any existing user before signing in
  */
 export async function login(email: string, password: string): Promise<SignInOutput> {
   try {
+    // Check if there's already a signed-in user and sign them out first
+    try {
+      const currentUser = await getCurrentUser();
+      if (currentUser) {
+        console.log('Signing out existing user before signing in...');
+        await signOut();
+        localStorage.removeItem(TOKEN_KEY);
+      }
+    } catch (error) {
+      // No current user, which is fine - continue with sign in
+      // This is expected if no user is signed in
+    }
+
     const output = await signIn({
       username: email,
       password,
@@ -44,8 +58,33 @@ export async function login(email: string, password: string): Promise<SignInOutp
     }
 
     return output;
-  } catch (error) {
+  } catch (error: any) {
     console.error('Login error:', error);
+    
+    // Handle UserAlreadyAuthenticatedException by signing out and retrying
+    if (error.name === 'UserAlreadyAuthenticatedException') {
+      console.log('User already authenticated, signing out and retrying...');
+      try {
+        await signOut();
+        localStorage.removeItem(TOKEN_KEY);
+        
+        // Retry sign in after signing out
+        const output = await signIn({
+          username: email,
+          password,
+        });
+        
+        if (output.isSignedIn) {
+          await storeToken();
+        }
+        
+        return output;
+      } catch (retryError) {
+        console.error('Retry login error:', retryError);
+        throw retryError;
+      }
+    }
+    
     throw error;
   }
 }

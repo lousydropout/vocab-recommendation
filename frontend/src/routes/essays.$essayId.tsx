@@ -34,6 +34,17 @@ function EssayReviewPage() {
     )
   }
 
+  const handleBack = () => {
+    if (essay?.student_id) {
+      navigate({ 
+        to: '/students/$studentId',
+        params: { studentId: essay.student_id }
+      })
+    } else {
+      navigate({ to: '/' })
+    }
+  }
+
   if (error || !essay) {
     return (
       <div className="p-8">
@@ -43,9 +54,9 @@ function EssayReviewPage() {
             {error instanceof Error ? error.message : 'Failed to load essay'}
           </AlertDescription>
         </Alert>
-        <Button onClick={() => navigate({ to: '/' })} className="mt-4">
+        <Button onClick={handleBack} className="mt-4">
           <ArrowLeft className="h-4 w-4 mr-2" />
-          Back to Dashboard
+          {essay?.student_id ? 'Back to Student' : 'Back to Dashboard'}
         </Button>
       </div>
     )
@@ -56,11 +67,11 @@ function EssayReviewPage() {
       <div className="mb-8">
         <Button
           variant="outline"
-          onClick={() => navigate({ to: '/' })}
+          onClick={handleBack}
           className="mb-4"
         >
           <ArrowLeft className="h-4 w-4 mr-2" />
-          Back to Dashboard
+          {essay.student_id ? 'Back to Student' : 'Back to Dashboard'}
         </Button>
         <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 bg-clip-text text-transparent">
           Essay Review

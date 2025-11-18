@@ -1,6 +1,8 @@
 #!/bin/bash
 
 # Script to delete all rows from DynamoDB tables using AWS CLI
+# Clears data from: Essays, Teachers, Students, Assignments tables
+# Note: Metrics tables (ClassMetrics, StudentMetrics) were removed - metrics computed on-demand
 # Usage: ./bin/clear-dynamodb-tables.sh [--region REGION] [--confirm]
 
 set -e
@@ -29,13 +31,12 @@ while [[ $# -gt 0 ]]; do
 done
 
 # List of all DynamoDB tables
+# Note: ClassMetrics and StudentMetrics tables were removed - metrics are computed on-demand from Essays table
 TABLES=(
-  "VincentVocabEssayMetrics"
+  "VincentVocabEssays"
   "VincentVocabTeachers"
   "VincentVocabStudents"
   "VincentVocabAssignments"
-  "VincentVocabClassMetrics"
-  "VincentVocabStudentMetrics"
 )
 
 # Function to delete all items from a table

@@ -279,13 +279,17 @@ export class VocabRecommendationStack extends cdk.Stack {
     essaysBatchResource.addMethod('POST', apiIntegration, authorizerOptions); // POST /essays/batch - batch upload (protected)
     const essaysPublicResource = essaysResource.addResource('public');
     essaysPublicResource.addMethod('POST', apiIntegration); // POST /essays/public - public demo upload (no auth)
+    // Specific routes must come before generic {essay_id} route to avoid conflicts
+    const essaysAssignmentResource = essaysResource.addResource('assignment');
+    const essaysAssignmentIdResource = essaysAssignmentResource.addResource('{assignment_id}');
+    essaysAssignmentIdResource.addMethod('GET', apiIntegration, authorizerOptions); // GET /essays/assignment/{assignment_id} - list essays for assignment
+    const essaysStudentResource = essaysResource.addResource('student');
+    const essaysStudentIdResource = essaysStudentResource.addResource('{student_id}');
+    essaysStudentIdResource.addMethod('GET', apiIntegration, authorizerOptions); // List essays for student
     const essayIdResourceOverride = essaysResource.addResource('{essay_id}');
     essayIdResourceOverride.addMethod('GET', apiIntegration); // GET /essays/{essay_id} - get essay (public for demo, protected for user essays)
     const essayOverrideResource = essayIdResourceOverride.addResource('override');
     essayOverrideResource.addMethod('PATCH', apiIntegration, authorizerOptions); // Override essay feedback
-    const essaysStudentResource = essaysResource.addResource('student');
-    const essaysStudentIdResource = essaysStudentResource.addResource('{student_id}');
-    essaysStudentIdResource.addMethod('GET', apiIntegration, authorizerOptions); // List essays for student
 
     // ECS, Aggregation Lambdas, and EssayUpdateQueue removed
     // All processing now handled by Worker Lambda via EssayProcessingQueue

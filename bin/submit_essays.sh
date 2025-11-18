@@ -22,9 +22,11 @@ API_URL="${API_URL:-}"
 ESSAYS_BUCKET="${ESSAYS_BUCKET:-}"
 PROCESSING_QUEUE_URL="${PROCESSING_QUEUE_URL:-}"
 
-# Script directory
+# Script directory (bin/)
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-DATA_DIR="${SCRIPT_DIR}/data"
+# Project root directory (parent of bin/)
+PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+DATA_DIR="${PROJECT_ROOT}/data"
 
 # ============================================================================
 # Helper Functions
@@ -74,9 +76,9 @@ load_config() {
     print_section "Configuration"
     
     # Check if config file exists
-    if [ -f "${SCRIPT_DIR}/.e2e_config" ]; then
+    if [ -f "${PROJECT_ROOT}/.e2e_config" ]; then
         print_info "Loading configuration from .e2e_config"
-        source "${SCRIPT_DIR}/.e2e_config"
+        source "${PROJECT_ROOT}/.e2e_config"
     fi
     
     # Prompt for missing values
@@ -497,7 +499,7 @@ show_summary() {
     echo
     
     # Save important info to file
-    cat > "${SCRIPT_DIR}/.submission_info" <<EOF
+    cat > "${PROJECT_ROOT}/.submission_info" <<EOF
 # Submission Information
 # Generated: $(date)
 
@@ -510,20 +512,20 @@ STUDENT_2_NAME="Sam Williams"
 
 # Quick commands:
 # Check class metrics:
-# curl -H "Authorization: Bearer \$(cat .jwt_token)" ${API_URL}/metrics/class/${ASSIGNMENT_ID} | jq
+# curl -H "Authorization: Bearer \$(cat ${PROJECT_ROOT}/.jwt_token)" ${API_URL}/metrics/class/${ASSIGNMENT_ID} | jq
 
 # Check student 1 metrics:
-# curl -H "Authorization: Bearer \$(cat .jwt_token)" ${API_URL}/metrics/student/${STUDENT_1_ID} | jq
+# curl -H "Authorization: Bearer \$(cat ${PROJECT_ROOT}/.jwt_token)" ${API_URL}/metrics/student/${STUDENT_1_ID} | jq
 
 # Check student 2 metrics:
-# curl -H "Authorization: Bearer \$(cat .jwt_token)" ${API_URL}/metrics/student/${STUDENT_2_ID} | jq
+# curl -H "Authorization: Bearer \$(cat ${PROJECT_ROOT}/.jwt_token)" ${API_URL}/metrics/student/${STUDENT_2_ID} | jq
 EOF
     
     # Save JWT to file for later use (optional)
-    echo "$TEACHER_JWT" > "${SCRIPT_DIR}/.jwt_token" 2>/dev/null || true
+    echo "$TEACHER_JWT" > "${PROJECT_ROOT}/.jwt_token" 2>/dev/null || true
     print_info "Information saved:"
-    echo "  JWT token: .jwt_token"
-    echo "  Submission info: .submission_info"
+    echo "  JWT token: ${PROJECT_ROOT}/.jwt_token"
+    echo "  Submission info: ${PROJECT_ROOT}/.submission_info"
 }
 
 # ============================================================================

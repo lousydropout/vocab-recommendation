@@ -11,7 +11,7 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException
 from typing import List, Dict, Any, Optional
 from pydantic import BaseModel
-from boto3.dynamodb.conditions import Attr
+from boto3.dynamodb.conditions import Attr, Key
 
 from app.deps import get_teacher_context, get_optional_teacher_context, TeacherContext
 
@@ -231,6 +231,146 @@ async def upload_public_essay(request: PublicEssayRequest):
         raise HTTPException(status_code=500, detail=f"Failed to upload essay: {str(e)}")
 
 
+@router.get("/assignment/{assignment_id}", response_model=List[Dict[str, Any]])
+async def list_assignment_essays(
+    assignment_id: str,
+    teacher_ctx: TeacherContext = Depends(get_teacher_context)
+):
+    """
+    List all essays for a specific assignment.
+    
+    Returns essays with their vocabulary_analysis for the given assignment_id.
+    Only returns essays that belong to the authenticated teacher.
+    Returns all essays regardless of status (pending or processed).
+    """
+    if not essays_table:
+        raise HTTPException(status_code=500, detail="Essays table not configured")
+    
+    try:
+        essays = []
+        
+        # Query essays by assignment_id (partition key)
+        # Filter by teacher_id only (include both pending and processed)
+        response = essays_table.query(
+            KeyConditionExpression=Key('assignment_id').eq(assignment_id),
+            FilterExpression=Attr('teacher_id').eq(teacher_ctx.teacher_id)
+        )
+        
+        essays.extend(response.get('Items', []))
+        
+        # Handle pagination
+        while 'LastEvaluatedKey' in response:
+            response = essays_table.query(
+                KeyConditionExpression=Key('assignment_id').eq(assignment_id),
+                FilterExpression=Attr('teacher_id').eq(teacher_ctx.teacher_id),
+                ExclusiveStartKey=response['LastEvaluatedKey']
+            )
+            essays.extend(response.get('Items', []))
+        
+        # Format response
+        result = []
+        for essay in essays:
+            essay_data = {
+                'essay_id': essay.get('essay_id'),
+                'assignment_id': essay.get('assignment_id'),
+                'student_id': essay.get('student_id'),
+                'status': essay.get('status', 'pending'),
+                'created_at': essay.get('created_at'),
+                'processed_at': essay.get('processed_at'),
+            }
+            
+            # Include vocabulary_analysis if available
+            if 'vocabulary_analysis' in essay:
+                essay_data['vocabulary_analysis'] = essay['vocabulary_analysis']
+            
+            result.append(essay_data)
+        
+        logger.info("Assignment essays retrieved", extra={
+            "teacher_id": teacher_ctx.teacher_id,
+            "assignment_id": assignment_id,
+            "essay_count": len(result),
+        })
+        
+        return result
+        
+    except Exception as e:
+        logger.error("Failed to list assignment essays", extra={
+            "teacher_id": teacher_ctx.teacher_id,
+            "assignment_id": assignment_id,
+            "error": str(e),
+        }, exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve assignment essays: {str(e)}")
+
+
+@router.get("/student/{student_id}", response_model=List[StudentEssayResponse])
+async def list_student_essays(
+    student_id: str,
+    teacher_ctx: TeacherContext = Depends(get_teacher_context)
+):
+    """
+    List all processed essays for a specific student.
+    
+    Returns essays sorted by created_at (ascending) with their vocabulary_analysis.
+    Only returns essays that belong to the authenticated teacher.
+    """
+    if not essays_table:
+        raise HTTPException(status_code=500, detail="Essays table not configured")
+    
+    try:
+        essays = []
+        
+        # Scan with filter to get all essays for this student
+        # Note: This is a scan operation - consider adding GSI if performance becomes an issue
+        response = essays_table.scan(
+            FilterExpression=Attr('teacher_id').eq(teacher_ctx.teacher_id) &
+                            Attr('student_id').eq(student_id) &
+                            Attr('status').eq('processed')
+        )
+        
+        essays.extend(response.get('Items', []))
+        
+        # Handle pagination
+        while 'LastEvaluatedKey' in response:
+            response = essays_table.scan(
+                FilterExpression=Attr('teacher_id').eq(teacher_ctx.teacher_id) &
+                                Attr('student_id').eq(student_id) &
+                                Attr('status').eq('processed'),
+                ExclusiveStartKey=response['LastEvaluatedKey']
+            )
+            essays.extend(response.get('Items', []))
+        
+        # Sort essays by created_at (ascending)
+        essays.sort(key=lambda x: x.get('created_at', ''))
+        
+        # Format response
+        result = []
+        for essay in essays:
+            # Convert vocabulary_analysis to metrics format for backward compatibility
+            vocab_analysis = essay.get('vocabulary_analysis', {})
+            result.append(StudentEssayResponse(
+                essay_id=essay.get('essay_id'),
+                assignment_id=essay.get('assignment_id'),
+                created_at=essay.get('created_at', ''),
+                metrics=vocab_analysis  # Use vocabulary_analysis as metrics
+            ))
+        
+        logger.info("Student essays retrieved", extra={
+            "teacher_id": teacher_ctx.teacher_id,
+            "student_id": student_id,
+            "essay_count": len(result),
+        })
+        
+        return result
+        
+    except Exception as e:
+        logger.error("Failed to list student essays", extra={
+            "teacher_id": teacher_ctx.teacher_id,
+            "student_id": student_id,
+            "error": str(e),
+        }, exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve student essays: {str(e)}")
+
+
 @router.get("/{essay_id}")
 async def get_essay(
     essay_id: str,
@@ -303,75 +443,6 @@ async def get_essay(
             "error": str(e),
         }, exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to retrieve essay: {str(e)}")
-
-
-@router.get("/student/{student_id}", response_model=List[StudentEssayResponse])
-async def list_student_essays(
-    student_id: str,
-    teacher_ctx: TeacherContext = Depends(get_teacher_context)
-):
-    """
-    List all processed essays for a specific student.
-    
-    Returns essays sorted by created_at (ascending) with their vocabulary_analysis.
-    Only returns essays that belong to the authenticated teacher.
-    """
-    if not essays_table:
-        raise HTTPException(status_code=500, detail="Essays table not configured")
-    
-    try:
-        essays = []
-        
-        # Scan with filter to get all essays for this student
-        # Note: This is a scan operation - consider adding GSI if performance becomes an issue
-        response = essays_table.scan(
-            FilterExpression=Attr('teacher_id').eq(teacher_ctx.teacher_id) &
-                            Attr('student_id').eq(student_id) &
-                            Attr('status').eq('processed')
-        )
-        
-        essays.extend(response.get('Items', []))
-        
-        # Handle pagination
-        while 'LastEvaluatedKey' in response:
-            response = essays_table.scan(
-                FilterExpression=Attr('teacher_id').eq(teacher_ctx.teacher_id) &
-                                Attr('student_id').eq(student_id) &
-                                Attr('status').eq('processed'),
-                ExclusiveStartKey=response['LastEvaluatedKey']
-            )
-            essays.extend(response.get('Items', []))
-        
-        # Sort essays by created_at (ascending)
-        essays.sort(key=lambda x: x.get('created_at', ''))
-        
-        # Format response
-        result = []
-        for essay in essays:
-            # Convert vocabulary_analysis to metrics format for backward compatibility
-            vocab_analysis = essay.get('vocabulary_analysis', {})
-            result.append(StudentEssayResponse(
-                essay_id=essay.get('essay_id'),
-                assignment_id=essay.get('assignment_id'),
-                created_at=essay.get('created_at', ''),
-                metrics=vocab_analysis  # Use vocabulary_analysis as metrics
-            ))
-        
-        logger.info("Student essays retrieved", extra={
-            "teacher_id": teacher_ctx.teacher_id,
-            "student_id": student_id,
-            "essay_count": len(result),
-        })
-        
-        return result
-        
-    except Exception as e:
-        logger.error("Failed to list student essays", extra={
-            "teacher_id": teacher_ctx.teacher_id,
-            "student_id": student_id,
-            "error": str(e),
-        }, exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Failed to retrieve student essays: {str(e)}")
 
 
 @router.patch("/{essay_id}/override", response_model=EssayOverrideResponse)

@@ -3,11 +3,16 @@
 
 set -e
 
-if [ ! -d "venv" ]; then
+# Script directory (bin/)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Project root directory (parent of bin/)
+PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+
+if [ ! -d "${PROJECT_ROOT}/venv" ]; then
     echo "Creating virtual environment..."
     if command -v python3 &> /dev/null; then
         # Try to create venv
-        if python3 -m venv venv 2>/dev/null; then
+        if python3 -m venv "${PROJECT_ROOT}/venv" 2>/dev/null; then
             echo "Virtual environment created successfully"
         else
             echo "Error: python3-venv not installed."
@@ -26,13 +31,13 @@ else
 fi
 
 echo "Activating virtual environment..."
-source venv/bin/activate
+source "${PROJECT_ROOT}/venv/bin/activate"
 
 echo "Upgrading pip..."
 pip install --upgrade pip
 
 echo "Virtual environment ready!"
-echo "To activate: source venv/bin/activate"
+echo "To activate: source ${PROJECT_ROOT}/venv/bin/activate"
 echo ""
 echo "Note: Lambda functions use Docker for dependency bundling during CDK deployment."
 echo "The venv is for local development only."

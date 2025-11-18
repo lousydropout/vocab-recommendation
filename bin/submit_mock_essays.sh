@@ -22,10 +22,12 @@ API_URL="${API_URL:-}"
 ESSAYS_BUCKET="${ESSAYS_BUCKET:-}"
 PROCESSING_QUEUE_URL="${PROCESSING_QUEUE_URL:-}"
 
-# Script directory
+# Script directory (bin/)
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ESSAYS_DIR="${SCRIPT_DIR}/essays/essays/prompt_1_2025-11-13"
-PROMPTS_FILE="${SCRIPT_DIR}/essays/memory-bank/prompts.json"
+# Project root directory (parent of bin/)
+PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+ESSAYS_DIR="${PROJECT_ROOT}/essays/essays/prompt_1_2025-11-13"
+PROMPTS_FILE="${PROJECT_ROOT}/essays/memory-bank/prompts.json"
 
 # ============================================================================
 # Helper Functions
@@ -75,9 +77,9 @@ load_config() {
     print_section "Configuration"
     
     # Check if config file exists
-    if [ -f "${SCRIPT_DIR}/.e2e_config" ]; then
+    if [ -f "${PROJECT_ROOT}/.e2e_config" ]; then
         print_info "Loading configuration from .e2e_config"
-        source "${SCRIPT_DIR}/.e2e_config"
+        source "${PROJECT_ROOT}/.e2e_config"
     fi
     
     # Prompt for missing values
@@ -434,7 +436,7 @@ verify_essays_processed() {
     # Scan for essays with this assignment_id
     local essays_response
     essays_response=$(aws dynamodb scan \
-        --table-name VincentVocabEssayMetrics \
+        --table-name VincentVocabEssays \
         --filter-expression "assignment_id = :aid" \
         --expression-attribute-values "{\":aid\":{\"S\":\"$ASSIGNMENT_ID\"}}" \
         --region "$AWS_REGION" \
@@ -568,7 +570,7 @@ show_summary() {
     echo
     
     # Save important info to file
-    cat > "${SCRIPT_DIR}/.mock_submission_info" <<EOF
+    cat > "${PROJECT_ROOT}/.mock_submission_info" <<EOF
 # Mock Essay Submission Information
 # Generated: $(date)
 
@@ -579,20 +581,20 @@ ESSAY_COUNT="${#ESSAY_FILES[@]}"
 
 # Quick commands:
 # Check class metrics:
-# curl -H "Authorization: Bearer \$(cat .jwt_token)" ${API_URL}/metrics/class/${ASSIGNMENT_ID} | jq
+# curl -H "Authorization: Bearer \$(cat ${PROJECT_ROOT}/.jwt_token)" ${API_URL}/metrics/class/${ASSIGNMENT_ID} | jq
 
 # Check students:
 # aws dynamodb scan --table-name VincentVocabStudents --filter-expression "teacher_id = :tid" --expression-attribute-values "{\":tid\":{\"S\":\"$TEACHER_ID\"}}" --region $AWS_REGION | jq
 
 # Check essays:
-# aws dynamodb scan --table-name VincentVocabEssayMetrics --filter-expression "assignment_id = :aid" --expression-attribute-values "{\":aid\":{\"S\":\"$ASSIGNMENT_ID\"}}" --region $AWS_REGION | jq
+# aws dynamodb scan --table-name VincentVocabEssays --filter-expression "assignment_id = :aid" --expression-attribute-values "{\":aid\":{\"S\":\"$ASSIGNMENT_ID\"}}" --region $AWS_REGION | jq
 EOF
     
     # Save JWT to file for later use (optional)
-    echo "$TEACHER_JWT" > "${SCRIPT_DIR}/.jwt_token" 2>/dev/null || true
+    echo "$TEACHER_JWT" > "${PROJECT_ROOT}/.jwt_token" 2>/dev/null || true
     print_info "Information saved:"
-    echo "  JWT token: .jwt_token"
-    echo "  Submission info: .mock_submission_info"
+    echo "  JWT token: ${PROJECT_ROOT}/.jwt_token"
+    echo "  Submission info: ${PROJECT_ROOT}/.mock_submission_info"
 }
 
 # ============================================================================

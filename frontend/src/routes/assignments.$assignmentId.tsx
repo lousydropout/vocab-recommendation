@@ -1,14 +1,15 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { requireAuth } from '../utils/route-protection'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { getAssignment, getClassMetrics, listStudents, getStudentMetrics, uploadBatchEssays } from '../api/client'
+import { getAssignment, getClassMetrics, listStudents, getStudentMetrics, uploadBatchEssays, listAssignmentEssays } from '../api/client'
 import type { AssignmentResponse, StudentResponse, StudentMetricsResponse } from '../types/api'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
 import { Button } from '../components/ui/button'
 import { Alert, AlertDescription } from '../components/ui/alert'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
 import { ArrowLeft, Loader2, AlertCircle, Upload, BarChart3, Users, TrendingUp, CheckCircle2 } from 'lucide-react'
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useMemo } from 'react'
+import * as React from 'react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
 
 // Helper function to safely convert to number
@@ -94,12 +95,73 @@ function AssignmentDetailPage() {
     },
   })
 
-  // Fetch students to show individual results
-  const { data: students, isLoading: studentsLoading } = useQuery<StudentResponse[]>({
+  // Fetch essays for this assignment to determine which students to show
+  const { data: assignmentEssays, isLoading: essaysLoading } = useQuery({
+    queryKey: ['assignment-essays', assignmentId],
+    queryFn: () => listAssignmentEssays(assignmentId),
+    enabled: !!assignmentId && !!assignment,
+    refetchInterval: 5000, // Poll every 5 seconds to catch newly processed essays
+  })
+
+  // Fetch all students
+  const { data: allStudents, isLoading: studentsLoading } = useQuery<StudentResponse[]>({
     queryKey: ['students'],
     queryFn: () => listStudents(),
-    enabled: !!metrics && toNumber(metrics.stats.essay_count) > 0,
+    enabled: !!assignmentId,
   })
+
+  // Create a combined list of students from both Students table and essays
+  // This ensures we show students even if they don't exist in the Students table
+  const students = useMemo(() => {
+    if (!assignmentEssays) return []
+    
+    // Create a map of student_id -> student info
+    const studentMap = new Map<string, { student_id: string; name: string; isFromTable: boolean }>()
+    
+    // First, add students from the Students table
+    if (allStudents) {
+      allStudents.forEach((student) => {
+        studentMap.set(student.student_id, {
+          student_id: student.student_id,
+          name: student.name,
+          isFromTable: true,
+        })
+      })
+    }
+    
+    // Then, add students from essays (if not already in map)
+    assignmentEssays.forEach((essay: any) => {
+      const studentId = essay.student_id
+      if (studentId && !studentMap.has(studentId)) {
+        // Try to extract name from student_id (format: "firstname_lastname" or similar)
+        // Or use a default display name
+        const displayName = studentId.includes('_') 
+          ? studentId.split('_').map((s: string) => s.charAt(0).toUpperCase() + s.slice(1).toLowerCase()).join(' ')
+          : studentId
+        studentMap.set(studentId, {
+          student_id: studentId,
+          name: displayName,
+          isFromTable: false,
+        })
+      }
+    })
+    
+    // Convert map to array, only including students who have essays
+    const studentIdsWithEssays = new Set(
+      assignmentEssays
+        .map((essay: any) => essay.student_id)
+        .filter((id: string) => id && id !== '')
+    )
+    
+    return Array.from(studentMap.values())
+      .filter((student) => studentIdsWithEssays.has(student.student_id))
+      .map((student) => ({
+        student_id: student.student_id,
+        name: student.name,
+        // Add other fields from Students table if available
+        ...(allStudents?.find((s) => s.student_id === student.student_id) || {}),
+      }))
+  }, [allStudents, assignmentEssays])
   
   // Save uploaded files to localStorage whenever they change
   useEffect(() => {
@@ -245,7 +307,17 @@ function AssignmentDetailPage() {
   }
 
   // Component to render a student row with their metrics
-  function StudentRow({ student }: { student: StudentResponse }) {
+  function StudentRow({ student }: { student: StudentResponse & { name: string } }) {
+    // Get essays for this student in this assignment
+    const studentEssays = useMemo(() => {
+      if (!assignmentEssays) return []
+      return assignmentEssays.filter((essay: any) => essay.student_id === student.student_id)
+    }, [assignmentEssays, student.student_id])
+    
+    const assignmentEssayCount = studentEssays.length
+    const processedCount = studentEssays.filter((e: any) => e.status === 'processed').length
+    const pendingCount = studentEssays.filter((e: any) => e.status === 'pending').length
+
     const { data: studentMetrics, isLoading } = useQuery<StudentMetricsResponse>({
       queryKey: ['student-metrics', student.student_id],
       queryFn: () => getStudentMetrics(student.student_id),
@@ -277,7 +349,7 @@ function AssignmentDetailPage() {
       )
     }
 
-    if (!studentMetrics || toNumber(studentMetrics.stats.total_essays) === 0) {
+    if (assignmentEssayCount === 0) {
       return (
         <tr className="border-b">
           <td className="p-3">
@@ -289,7 +361,7 @@ function AssignmentDetailPage() {
             </button>
           </td>
           <td colSpan={4} className="p-3 text-center text-muted-foreground text-sm">
-            No essays submitted
+            No essays submitted for this assignment
           </td>
         </tr>
       )
@@ -305,10 +377,20 @@ function AssignmentDetailPage() {
             {student.name}
           </button>
         </td>
-        <td className="p-3 text-right">{toNumber(studentMetrics.stats.total_essays)}</td>
-        <td className="p-3 text-right">{toNumber(studentMetrics.stats.avg_ttr).toFixed(2)}</td>
-        <td className="p-3 text-right">{Math.round(toNumber(studentMetrics.stats.avg_word_count))}</td>
-        <td className="p-3 text-right">{Math.round(toNumber(studentMetrics.stats.avg_freq_rank))}</td>
+        <td className="p-3 text-right">
+          <div className="flex flex-col items-end gap-1">
+            <span>{assignmentEssayCount}</span>
+            {pendingCount > 0 && (
+              <span className="text-xs text-orange-600">({pendingCount} pending)</span>
+            )}
+            {processedCount > 0 && (
+              <span className="text-xs text-green-600">({processedCount} processed)</span>
+            )}
+          </div>
+        </td>
+        <td className="p-3 text-right">{toNumber(studentMetrics?.stats.avg_ttr || 0).toFixed(2)}</td>
+        <td className="p-3 text-right">{Math.round(toNumber(studentMetrics?.stats.avg_word_count || 0))}</td>
+        <td className="p-3 text-right">{Math.round(toNumber(studentMetrics?.stats.avg_freq_rank || 0))}</td>
       </tr>
     )
   }
@@ -327,10 +409,18 @@ function AssignmentDetailPage() {
     { name: 'Avg Word Difficulty', value: Math.round(toNumber(metrics.stats.avg_freq_rank)) },
   ] : []
 
-  const correctRate = metrics?.stats && metrics.stats.essay_count > 0 && metrics.stats.correctness
-    ? ((toNumber(metrics.stats.correctness.correct) / 
-        (toNumber(metrics.stats.correctness.correct) + toNumber(metrics.stats.correctness.incorrect))) * 100).toFixed(1)
-    : '0.0'
+  const correctRate = (() => {
+    if (!metrics?.stats || metrics.stats.essay_count === 0 || !metrics.stats.correctness) {
+      return '0.0'
+    }
+    const correct = toNumber(metrics.stats.correctness.correct)
+    const incorrect = toNumber(metrics.stats.correctness.incorrect)
+    const total = correct + incorrect
+    if (total === 0) {
+      return '0.0'
+    }
+    return ((correct / total) * 100).toFixed(1)
+  })()
 
   return (
     <div className="p-8">
@@ -616,21 +706,37 @@ function AssignmentDetailPage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              {metricsLoading ? (
+              {essaysLoading || metricsLoading ? (
                 <div className="text-center py-8">
                   <Loader2 className="h-8 w-8 animate-spin text-muted-foreground mx-auto mb-4" />
-                  <p className="text-muted-foreground">Loading metrics...</p>
+                  <p className="text-muted-foreground">Loading essays and metrics...</p>
                 </div>
-              ) : metrics && toNumber(metrics.stats.essay_count) > 0 ? (
+              ) : assignmentEssays && assignmentEssays.length > 0 ? (
                 <div className="space-y-4">
-                  <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
-                    <p className="text-sm font-medium text-green-900 mb-1">
-                      {toNumber(metrics.stats.essay_count)} essay{toNumber(metrics.stats.essay_count) !== 1 ? 's' : ''} processed
-                    </p>
-                    <p className="text-xs text-green-700">
-                      Essays have been analyzed and metrics are available.
-                    </p>
-                  </div>
+                  {(() => {
+                    const processedCount = assignmentEssays.filter((e: any) => e.status === 'processed').length
+                    const pendingCount = assignmentEssays.filter((e: any) => e.status === 'pending').length
+                    return (
+                      <div className={`p-4 border rounded-lg ${
+                        pendingCount > 0 
+                          ? 'bg-orange-50 border-orange-200' 
+                          : 'bg-green-50 border-green-200'
+                      }`}>
+                        <p className="text-sm font-medium mb-1">
+                          {processedCount > 0 && `${processedCount} essay${processedCount !== 1 ? 's' : ''} processed`}
+                          {processedCount > 0 && pendingCount > 0 && ' • '}
+                          {pendingCount > 0 && `${pendingCount} essay${pendingCount !== 1 ? 's' : ''} pending`}
+                        </p>
+                        <p className={`text-xs ${
+                          pendingCount > 0 ? 'text-orange-700' : 'text-green-700'
+                        }`}>
+                          {pendingCount > 0 
+                            ? 'Some essays are still being processed. Metrics will update automatically.'
+                            : 'All essays have been analyzed and metrics are available.'}
+                        </p>
+                      </div>
+                    )
+                  })()}
                   
                   {studentsLoading ? (
                     <div className="text-center py-4">
