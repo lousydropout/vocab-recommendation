@@ -12,5 +12,10 @@ new VocabRecommendationStack(app, 'VincentVocabRecommendationStack', {
   env: account && region
     ? { account, region }
     : undefined, // Will use default from AWS CLI config if not specified
-  description: 'Vocabulary Essay Analyzer PoC - Serverless infrastructure for essay analysis',
+  description: 'Vocabulary Essay Analyzer - Serverless teaching platform for essay vocabulary analysis with OpenAI GPT-4.1-mini',
+  tags: {
+    Project: 'vocab-recommendation',
+    Environment: process.env.ENVIRONMENT || 'production',
+    ManagedBy: 'CDK',
+  },
 });

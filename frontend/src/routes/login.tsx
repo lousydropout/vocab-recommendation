@@ -1,7 +1,7 @@
-import { createFileRoute, useNavigate } from '@tanstack/react-router'
-import { useState } from 'react'
+import { createFileRoute, useNavigate, redirect } from '@tanstack/react-router'
+import { useState, useEffect } from 'react'
 import type { FormEvent } from 'react'
-import { login } from '../utils/auth'
+import { login, isAuthenticated } from '../utils/auth'
 import { Button } from '../components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
 import { Alert, AlertDescription } from '../components/ui/alert'
@@ -9,16 +9,32 @@ import { AlertCircle, Loader2 } from 'lucide-react'
 import { useAuth } from '../providers/AuthProvider'
 
 export const Route = createFileRoute('/login')({
+  beforeLoad: async () => {
+    // Redirect to dashboard if already authenticated
+    const authenticated = await isAuthenticated()
+    if (authenticated) {
+      throw redirect({
+        to: '/dashboard',
+      })
+    }
+  },
   component: Login,
 })
 
 function Login() {
   const navigate = useNavigate()
-  const { checkAuth } = useAuth()
+  const { checkAuth, isLoggedIn, isLoading: authLoading } = useAuth()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // Redirect to dashboard if already logged in
+  useEffect(() => {
+    if (!authLoading && isLoggedIn) {
+      navigate({ to: '/dashboard' })
+    }
+  }, [isLoggedIn, authLoading, navigate])
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
@@ -45,6 +61,11 @@ function Login() {
         setError('Invalid email or password. Please try again.')
       } else if (err.name === 'UserNotConfirmedException') {
         setError('Please verify your email address before logging in.')
+      } else if (err.name === 'UserAlreadyAuthenticatedException') {
+        // User is already authenticated, redirect to dashboard
+        await checkAuth()
+        navigate({ to: '/dashboard' })
+        return
       } else if (err.message) {
         setError(err.message)
       } else {

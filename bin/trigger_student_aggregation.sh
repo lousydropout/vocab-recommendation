@@ -3,6 +3,11 @@
 
 set -e
 
+# Script directory (bin/)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Project root directory (parent of bin/)
+PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+
 TEACHER_ID="${1:-b4e85478-1001-70ba-9a0d-733fe615295e}"
 STUDENT_ID="${2}"
 QUEUE_URL="https://sqs.us-east-1.amazonaws.com/971422717446/vincent-vocab-essay-update-queue"
@@ -27,5 +32,5 @@ echo "Waiting 5 seconds for aggregation..."
 sleep 5
 
 echo "Check student metrics with:"
-echo "curl -H \"Authorization: Bearer \$(cat .jwt_token)\" https://m18eg6bei9.execute-api.us-east-1.amazonaws.com/prod/metrics/student/$STUDENT_ID | jq"
+echo "curl -H \"Authorization: Bearer \$(cat ${PROJECT_ROOT}/.jwt_token)\" https://m18eg6bei9.execute-api.us-east-1.amazonaws.com/prod/metrics/student/$STUDENT_ID | jq"
 

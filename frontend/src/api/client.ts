@@ -253,3 +253,19 @@ export async function listStudentEssays(studentId: string) {
   }
 }
 
+export async function listAssignmentEssays(assignmentId: string) {
+  try {
+    const response = await apiRequest(`${API_BASE_URL}/essays/assignment/${assignmentId}`);
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => response.statusText);
+      throw new Error(`Failed to list assignment essays: ${response.status} ${errorText}`);
+    }
+    return response.json();
+  } catch (error) {
+    if (error instanceof Error) {
+      throw error;
+    }
+    throw new Error(`Failed to list assignment essays: ${String(error)}`);
+  }
+}
+
