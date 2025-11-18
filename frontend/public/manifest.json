@@ -1,6 +1,6 @@
 {
-  "short_name": "TanStack App",
-  "name": "Create TanStack App Sample",
+  "short_name": "Vocab Analyzer",
+  "name": "Vocabulary Essay Analyzer",
   "icons": [
     {
       "src": "favicon.ico",
