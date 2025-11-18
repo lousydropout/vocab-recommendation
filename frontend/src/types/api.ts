@@ -8,29 +8,28 @@ export interface VocabularyAnalysis {
 
 export interface EssayResponse {
   essay_id: string;
-  status: "awaiting_processing" | "processing" | "processed";
-  file_key?: string;
-  presigned_url?: string;
-  expires_in?: number;
+  assignment_id: string;
+  student_id: string;
+  status: "pending" | "processed";
   vocabulary_analysis?: VocabularyAnalysis;
-  // Legacy fields (for teacher version)
-  metrics?: {
-    word_count: number;
-    unique_words: number;
-    type_token_ratio: number;
-    noun_ratio?: number;
-    verb_ratio?: number;
-    adj_ratio?: number;
-    adv_ratio?: number;
-    avg_word_freq_rank?: number;
-  };
-  feedback?: Array<{
-    word: string;
-    correct: boolean;
-    comment: string;
-  }>;
-  created_at?: string;
-  updated_at?: string;
+  created_at: string;
+  processed_at?: string;
+}
+
+export interface EssayItem {
+  filename: string;
+  text: string;
+}
+
+export interface BatchEssayRequest {
+  assignment_id: string;
+  student_id?: string;
+  essays: EssayItem[];
+}
+
+export interface BatchEssayResponse {
+  essay_id: string;
+  status: string;
 }
 
 export interface ClassMetricsResponse {
@@ -65,11 +64,8 @@ export interface StudentEssayResponse {
   essay_id: string;
   assignment_id?: string;
   created_at: string;
-  metrics: {
-    type_token_ratio: number;
-    word_count: number;
-    avg_word_freq_rank?: number;
-  };
+  // Backend returns vocabulary_analysis as metrics for backward compatibility
+  metrics: VocabularyAnalysis;
 }
 
 export interface EssayOverrideRequest {

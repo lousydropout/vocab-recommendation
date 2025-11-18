@@ -33,9 +33,18 @@ async function apiRequest(url: string, options: RequestInit = {}): Promise<Respo
   return response;
 }
 
-// Re-export types from types file
+// Import types for use in this file
+import type {
+  EssayResponse,
+  BatchEssayResponse,
+} from '../types/api';
+
+// Re-export types for external use
 export type {
   EssayResponse,
+  BatchEssayRequest,
+  BatchEssayResponse,
+  EssayItem,
   ClassMetricsResponse,
   StudentMetricsResponse,
   StudentEssayResponse,
@@ -72,52 +81,37 @@ export async function checkAuthHealth(): Promise<{
   return response.json();
 }
 
-// Essay endpoints (public - work without authentication)
-export async function uploadEssay(essayText: string) {
-  // Make request without auth token for legacy essays
-  try {
-    const response = await fetch(`${API_BASE_URL}/essay`, {
-      method: "POST",
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ essay_text: essayText }),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text().catch(() => response.statusText);
-      throw new Error(`Failed to upload essay: ${response.status} ${errorText}`);
+// Essay endpoints
+export async function getEssay(essayId: string): Promise<EssayResponse> {
+  const response = await apiRequest(`${API_BASE_URL}/essays/${essayId}`);
+  if (!response.ok) {
+    if (response.status === 404) {
+      throw new Error("Essay not found");
     }
-
-    return response.json();
-  } catch (error) {
-    if (error instanceof TypeError && error.message.includes('fetch')) {
-      throw new Error(`Network error: Unable to reach the API. Please check your connection and API URL: ${API_BASE_URL}`);
-    }
-    throw error;
+    const errorText = await response.text().catch(() => response.statusText);
+    throw new Error(`Failed to fetch essay: ${response.status} ${errorText}`);
   }
+  return response.json();
 }
 
-export async function getEssay(essayId: string) {
-  // Make request without auth token for legacy essays
-  try {
-    const response = await fetch(`${API_BASE_URL}/essay/${essayId}`);
-
-    if (!response.ok) {
-      if (response.status === 404) {
-        throw new Error("Essay not found");
-      }
-      const errorText = await response.text().catch(() => response.statusText);
-      throw new Error(`Failed to fetch essay: ${response.status} ${errorText}`);
-    }
-
-    return response.json();
-  } catch (error) {
-    if (error instanceof TypeError && error.message.includes('fetch')) {
-      throw new Error(`Network error: Unable to reach the API. Please check your connection and API URL: ${API_BASE_URL}`);
-    }
-    throw error;
+export async function uploadBatchEssays(
+  assignmentId: string,
+  studentId: string | undefined,
+  essays: Array<{ filename: string; text: string }>
+): Promise<BatchEssayResponse[]> {
+  const response = await apiRequest(`${API_BASE_URL}/essays/batch`, {
+    method: 'POST',
+    body: JSON.stringify({
+      assignment_id: assignmentId,
+      student_id: studentId,
+      essays: essays,
+    }),
+  });
+  if (!response.ok) {
+    const errorText = await response.text().catch(() => response.statusText);
+    throw new Error(`Failed to upload batch essays: ${response.status} ${errorText}`);
   }
+  return response.json();
 }
 
 // Metrics endpoints

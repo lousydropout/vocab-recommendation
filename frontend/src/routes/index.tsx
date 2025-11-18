@@ -1,6 +1,5 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useState, useEffect } from 'react'
-import { uploadEssay, getEssay } from '../api/client'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
 import { Button } from '../components/ui/button'
 import { Textarea } from '../components/ui/textarea'
@@ -13,6 +12,7 @@ import {
   SelectValue,
 } from '../components/ui/select'
 import { Loader2, CheckCircle2, XCircle, LogIn, BookOpen } from 'lucide-react'
+import { config } from '../utils/config'
 import type { EssayResponse } from '../types/api'
 
 export const Route = createFileRoute('/')({
@@ -59,18 +59,35 @@ function HomePage() {
     setEssay(null)
 
     try {
-      const response = await uploadEssay(essayText)
-      setStatus('processing')
-      
+      // Call public endpoint for demo
+      const response = await fetch(`${config.API_URL}/essays/public`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          essay_text: essayText,
+        }),
+      })
+
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => response.statusText)
+        throw new Error(`Failed to upload essay: ${response.status} ${errorText}`)
+      }
+
+      const result = await response.json()
+      const essayId = result.essay_id
+
       // Start polling for results
-      startPolling(response.essay_id)
+      setStatus('processing')
+      startPolling(essayId)
     } catch (err: any) {
       setError(err.message || 'Failed to upload essay')
       setStatus('error')
     }
   }
 
-  const startPolling = (id: string) => {
+  const startPolling = (essayId: string) => {
     // Clear any existing polling
     if (pollingInterval) {
       clearInterval(pollingInterval)
@@ -78,14 +95,23 @@ function HomePage() {
 
     const interval = setInterval(async () => {
       try {
-        const result = await getEssay(id)
+        const response = await fetch(`${config.API_URL}/essays/${essayId}`)
+        if (!response.ok) {
+          if (response.status === 404) {
+            // Essay not found yet, keep polling
+            return
+          }
+          throw new Error(`Failed to fetch essay: ${response.status}`)
+        }
+
+        const result: EssayResponse = await response.json()
         setEssay(result)
         
         if (result.status === 'processed') {
           setStatus('completed')
           clearInterval(interval)
           setPollingInterval(null)
-        } else if (result.status === 'processing' || result.status === 'awaiting_processing') {
+        } else if (result.status === 'pending') {
           setStatus('processing')
         }
       } catch (err: any) {
@@ -96,6 +122,7 @@ function HomePage() {
 
     setPollingInterval(interval)
   }
+
 
   useEffect(() => {
     // Cleanup polling on unmount
@@ -334,83 +361,20 @@ function HomePage() {
                 </Card>
               </>
             ) : (
-              // Legacy metrics/feedback format (for teacher version)
-              <>
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <CheckCircle2 className="h-5 w-5 text-green-600" />
-                      Analysis Complete
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    {essay.metrics && (
-                      <div className="space-y-4">
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                          <div>
-                            <p className="text-sm text-muted-foreground">Word Count</p>
-                            <p className="text-2xl font-bold">{essay.metrics.word_count}</p>
-                          </div>
-                          <div>
-                            <p className="text-sm text-muted-foreground">Unique Words</p>
-                            <p className="text-2xl font-bold">{essay.metrics.unique_words}</p>
-                          </div>
-                          <div>
-                            <p className="text-sm text-muted-foreground">Type-Token Ratio</p>
-                            <p className="text-2xl font-bold">
-                              {essay.metrics.type_token_ratio?.toFixed(3) || 'N/A'}
-                            </p>
-                          </div>
-                          <div>
-                            <p className="text-sm text-muted-foreground">Avg Word Frequency</p>
-                            <p className="text-2xl font-bold">
-                              {essay.metrics.avg_word_freq_rank?.toFixed(0) || 'N/A'}
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-
-                {essay.feedback && essay.feedback.length > 0 && (
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Word-Level Feedback</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-3">
-                        {essay.feedback.map((item, index) => (
-                          <div
-                            key={index}
-                            className={`p-3 rounded-lg border-2 ${
-                              item.correct
-                                ? 'border-green-200 bg-green-50'
-                                : 'border-red-200 bg-red-50'
-                            }`}
-                          >
-                            <div className="flex items-center justify-between mb-1">
-                              <span className="font-semibold">{item.word}</span>
-                              <span
-                                className={`text-xs px-2 py-1 rounded ${
-                                  item.correct
-                                    ? 'bg-green-200 text-green-800'
-                                    : 'bg-red-200 text-red-800'
-                                }`}
-                              >
-                                {item.correct ? 'Correct' : 'Incorrect'}
-                              </span>
-                            </div>
-                            {item.comment && (
-                              <p className="text-sm text-muted-foreground mt-1">{item.comment}</p>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    </CardContent>
-                  </Card>
-                )}
-              </>
+              // Essay processed but no vocabulary_analysis available
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <CheckCircle2 className="h-5 w-5 text-green-600" />
+                    Analysis Complete
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-muted-foreground">
+                    Essay has been processed, but vocabulary analysis is not available.
+                  </p>
+                </CardContent>
+              </Card>
             )}
 
             <div className="text-center">

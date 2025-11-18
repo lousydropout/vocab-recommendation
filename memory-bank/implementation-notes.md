@@ -11,134 +11,181 @@ vocab_recommendation/
 ├── test/
 │   └── vocab_recommendation.test.ts    # CDK unit tests ✅
 ├── lambda/
-│   ├── api/                             # ✅ Epic 2
+│   ├── api/                             # ✅ API Lambda (FastAPI)
 │   │   ├── lambda_function.py
-│   │   ├── app.py
+│   │   ├── main.py
+│   │   ├── app/
+│   │   │   ├── routes/
+│   │   │   │   ├── essays.py           # Batch upload endpoint
+│   │   │   │   ├── students.py
+│   │   │   │   ├── assignments.py
+│   │   │   │   └── metrics.py          # Placeholder endpoints
+│   │   │   ├── deps.py                 # Auth dependencies
+│   │   │   └── db/
 │   │   └── requirements.txt
-│   ├── s3_upload_trigger/               # ✅ Epic 2
-│   │   ├── lambda_function.py
-│   │   └── requirements.txt
-│   └── processor/                       # ✅ Epic 3 (Migrated to ECS Fargate)
-│       ├── lambda_function.py          # ECS worker (long-running SQS poller)
-│       ├── requirements.txt
-│       └── Dockerfile                   # Docker container for ECS (python:3.12-slim)
-├── frontend/                             # ✅ Epic 4
+│   └── worker/                          # ✅ Worker Lambda (OpenAI)
+│       ├── lambda_function.py          # SQS-triggered essay processor
+│       └── requirements.txt             # boto3, openai
+├── frontend/                             # ✅ React + TanStack Router
 │   ├── src/
+│   │   ├── routes/                      # File-based routing
+│   │   ├── api/                         # API client
 │   │   ├── components/ui/               # shadcn/ui components
-│   │   ├── lib/                         # API client, utils
-│   │   ├── App.tsx                      # Main application
-│   │   └── test/                        # Test setup
-│   ├── components.json                  # shadcn/ui config
+│   │   └── types/                       # TypeScript types
 │   └── package.json
-├── test/
-│   ├── vocab_recommendation.test.ts     # ✅ CDK unit tests
-│   ├── test_api.py                      # ✅ API integration tests
-│   └── test_processing.py              # ✅ End-to-end processing tests
 ├── memory-bank/                         # Project documentation
 └── package.json                         # CDK dependencies (TypeScript)
 ```
 
+**Removed Directories:**
+
+- ❌ `lambda/processor/` - Removed (ECS Fargate worker)
+- ❌ `lambda/s3_upload_trigger/` - Removed (no S3 triggers)
+- ❌ `lambda/aggregations/` - Removed (no aggregation Lambdas)
+
 ## Key Implementation Details
 
-### ECS Fargate Worker Service (Processor - Migrated from Lambda)
+### Worker Lambda (Simplified Async Architecture - 2025-01-18)
 
-**Decision**: Migrated from Docker-based Lambda to ECS Fargate due to 250MB unzipped package size limit (spaCy + model exceeds Lambda limits).
+**Decision**: Replaced ECS Fargate + spaCy + Bedrock with Worker Lambda + OpenAI GPT-4.1-mini for fully serverless architecture.
 
 **Architecture**:
-- ECS Fargate service with 1-2 tasks (auto-scaling based on CPU)
-- Default VPC with public subnets, public IP assignment
-- Long-running worker that continuously polls SQS queue
-- Same processing logic as Lambda version (no business logic changes)
 
-1. Dockerfile structure:
-   ```dockerfile
-   FROM python:3.12-slim
-   WORKDIR /app
-   RUN apt-get update && apt-get install -y --no-install-recommends build-essential
-   COPY requirements.txt .
-   RUN pip install --no-cache-dir -r requirements.txt
-   RUN pip install --no-cache-dir https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.7.1/en_core_web_sm-3.7.1-py3-none-any.whl
-   COPY lambda_function.py .
-   CMD ["python", "-u", "lambda_function.py"]
-   ```
+- Single Lambda function triggered by SQS events
+- No package size limits (OpenAI API, not local models)
+- Processes essays asynchronously: Load from DynamoDB → Call OpenAI → Update DynamoDB
+- Automatic retries via SQS (3 attempts before DLQ)
+
+1. Worker Lambda Code (`lambda/worker/lambda_function.py`):
+
+   - `handler()` function receives SQS events
+   - For each message: extracts IDs, loads essay_text from DynamoDB, calls OpenAI, updates DynamoDB
+   - Handles retries automatically (SQS retries up to 3 times)
+   - Errors go to DLQ after maxReceiveCount
 
 2. CDK deployment:
-   - Uses `ecr_assets.DockerImageAsset` to build and push to ECR
-   - ECS Cluster in default VPC with public subnets
-   - Fargate Task Definition: 2 vCPU, 4GB memory
-   - Auto-scaling: 1-2 tasks, 70% CPU target
-   - CloudWatch Logs: `/ecs/vocab-processor`
 
-3. Worker code:
-   - `main()` function with infinite loop
-   - Long-polls SQS with 20-second wait time
-   - Processes messages, deletes after success
-   - Graceful shutdown on SIGTERM
-   - Same helper functions as Lambda version
+   - Lambda function with SQS event source
+   - Timeout: 5 minutes (must be >= SQS visibility timeout)
+   - Environment variables: `ESSAYS_TABLE`, `OPENAI_API_KEY`
+   - IAM permissions: SQS (receive/delete), DynamoDB (read/write)
 
-4. IAM Permissions:
-   - Task role: SQS (receive/delete), DynamoDB (read/write), S3 (read), Bedrock (invoke)
+3. Processing Flow:
+   - SQS message contains: `{ teacher_id, assignment_id, student_id, essay_id }`
+   - Worker loads `essay_text` from DynamoDB using `assignment_id` + `essay_id`
+   - Calls OpenAI GPT-4.1-mini with vocabulary analysis prompt
+   - Updates DynamoDB: `vocabulary_analysis`, `status: "processed"`, `processed_at`
+   - SQS auto-deletes message on success
 
-### Bedrock Integration
+### OpenAI Integration (Worker Lambda)
 
-- **Model ID**: `anthropic.claude-3-sonnet-20240229-v1:0`
-- **Region**: Must match stack region
-- **IAM Permissions**: `bedrock:InvokeModel` on model ARN
-- **API Format**: Bedrock Runtime API with Anthropic message format
+- **Model**: `gpt-4.1-mini`
+- **API**: OpenAI Python SDK
+- **Environment Variable**: `OPENAI_API_KEY` (set in Worker Lambda)
+- **Response Format**: JSON object with `correctness_review`, `vocabulary_used`, `recommended_vocabulary`
+- **Error Handling**: Retries with exponential backoff, DLQ after 3 failures
+- **Processing Time**: Typically 2-10 seconds per essay
 
-### Student Metrics Aggregation
+### CORS Configuration
 
-**Flow:**
-1. Processor Lambda processes essay and updates DynamoDB
-2. Processor Lambda sends message to `EssayUpdateQueue` with:
-   - `teacher_id`, `assignment_id`, `essay_id`, `student_id` (required for student metrics)
-3. Aggregation Lambda (`student_metrics.py`) consumes from `EssayUpdateQueue`
-4. Aggregation Lambda queries all essays for the student (scan with filter)
-5. Aggregation Lambda computes rolling averages:
-   - `avg_ttr`: Average type-token ratio
-   - `avg_word_count`: Average word count
-   - `avg_unique_words`: Average unique words
-   - `avg_freq_rank`: Average word frequency rank
-   - `total_essays`: Total processed essays
-   - `trend`: improving/stable/declining (based on last 6 essays)
-6. Aggregation Lambda updates `StudentMetrics` table
+**API Gateway:**
+- Configured in `defaultCorsPreflightOptions`
+- Allowed origins: `https://vocab.vincentchan.cloud`, `http://localhost:3000`, `http://localhost:5173`
+- `allowCredentials: true`
 
-**Critical Fix (2025-11-13):**
-- Processor Lambda must include `student_id` in EssayUpdateQueue messages
-- Without `student_id`, aggregation Lambda cannot process student metrics
-- Fixed in `lambda/processor/lambda_function.py` lines 655-657
+**FastAPI Middleware:**
+- CORS middleware with same origin list
+- Global exception handlers ensure CORS headers in all error responses
+- Handles: `Exception`, `HTTPException`, `RequestValidationError`
 
-### S3 Event Flow
+**Critical Fix (2025-01-18):**
+- Added global exception handlers to ensure CORS headers are always present
+- Prevents CORS errors even when Lambda function throws exceptions
+- Validates origin header against allowed list
 
-**Two Processing Flows:**
+### Dependency Bundling
 
-1. **Legacy Flow** (`essays/{essay_id}.txt`):
-   - Client uploads via `POST /essay` API
-   - S3 key: `essays/{essay_id}.txt`
-   - S3 triggers Lambda on `ObjectCreated` event
-   - Lambda extracts existing `essay_id` from S3 key
-   - Lambda sends message to SQS queue with existing `essay_id`
-   - Processor Lambda consumes from SQS
+**CDK Lambda Bundling:**
+- Uses Docker to install Python dependencies during CDK deploy
+- Command: `pip install -r requirements.txt -t /asset-output`
+- Copies source files to `/asset-output`
 
-2. **Assignment Flow** (`{teacher_id}/assignments/{assignment_id}/{file_name}`):
-   - Client gets presigned URL via `POST /assignments/{id}/upload-url`
-   - Client uploads directly to S3 using presigned URL
-   - S3 triggers Lambda on `ObjectCreated` event
-   - Lambda downloads essay text from S3
-   - Lambda extracts student name from essay text
-   - Lambda creates/updates student record
-   - Lambda generates new `essay_id` and sends SQS message with:
-     - `essay_id`: New UUID
-     - `file_key`: Existing S3 key (no re-upload)
-     - `teacher_id`, `assignment_id`, `student_id`: Metadata
-   - Processor Lambda consumes from SQS
+**Critical Fix (2025-01-18):**
+- **DO NOT** use `CDK_SKIP_BUNDLING=true` in production
+- This flag skips dependency installation, causing `No module named 'mangum'` errors
+- Always deploy with bundling enabled to ensure dependencies are included
+
+### Batch Upload Flow (Authenticated)
+
+**Unified Async Processing:**
+
+1. **Frontend** → `POST /essays/batch`:
+   - Drag-and-drop multiple `.txt` files
+   - Reads file content as text
+   - Sends: `{ assignment_id, student_id?, essays: [{ filename, text }] }`
+   - Requires authentication (JWT token)
+
+2. **API Lambda**:
+   - Generates `essay_id` for each essay
+   - Creates DynamoDB records: `{ assignment_id, essay_id, teacher_id, student_id, essay_text, status: "pending", created_at }`
+   - Enqueues SQS messages: `{ teacher_id, assignment_id, student_id, essay_id }` (NO essay_text)
+   - Returns immediately: `[{ essay_id, status: "pending" }, ...]`
+
+3. **Worker Lambda** (triggered by SQS):
+   - Loads essay_text from DynamoDB
+   - Calls OpenAI GPT-4.1-mini
+   - Updates DynamoDB: `vocabulary_analysis`, `status: "processed"`, `processed_at`
+
+4. **Frontend Polling**:
+   - Polls `GET /essays/{essay_id}` every 2-3 seconds
+   - Displays results when `status === "processed"`
+
+### Public Demo Flow (Unauthenticated)
+
+**Public Demo Processing:**
+
+1. **Frontend** → `POST /essays/public`:
+   - User enters essay text in demo form
+   - Sends: `{ essay_text: "..." }`
+   - No authentication required
+
+2. **API Lambda**:
+   - Generates `essay_id`
+   - Creates DynamoDB record with:
+     - `teacher_id: "demo-teacher"`
+     - `assignment_id: "demo-public-assignment"`
+     - `student_id: ""` (empty string)
+   - Enqueues SQS message
+   - Returns: `{ essay_id, status: "pending" }`
+
+3. **Worker Lambda** (same as authenticated flow):
+   - Processes via OpenAI
+   - Updates DynamoDB with vocabulary_analysis
+
+4. **Frontend Polling**:
+   - Polls `GET /essays/{essay_id}` (no auth required for demo essays)
+   - Displays results when processed
+
+### Removed Flows (Legacy Architecture)
+
+- ❌ **S3 Event Flow**: No S3 triggers - all uploads via API
+- ❌ **ZIP Upload**: No ZIP file support - only `.txt` files
+- ❌ **Student Metrics Aggregation**: Metrics computed on-demand from Essays table
+- ❌ **Class Metrics Aggregation**: Metrics computed on-demand from Essays table
+  - Lambda generates new `essay_id` and sends SQS message with:
+    - `essay_id`: New UUID
+    - `file_key`: Existing S3 key (no re-upload)
+    - `teacher_id`, `assignment_id`, `student_id`: Metadata
+  - Processor Lambda consumes from SQS
 
 **Bug Fix (2025-11-13):**
+
 - Fixed assignment flow to use existing S3 files instead of attempting re-upload
 - Assignment essays now correctly send SQS messages with existing `file_key`
 - Processor Lambda includes `student_id` in EssayUpdateQueue messages for aggregation
 
 **Bug Fix (2025-11-11):**
+
 - Legacy essays were incorrectly calling `process_single_essay()` which generated new `essay_id` and tried to re-upload
 - Fixed: Legacy essays now directly send SQS message with existing `essay_id` from S3 key
 
@@ -155,6 +202,7 @@ vocab_recommendation/
 **Issue**: Local `venv/` directories were being included in Lambda bundles, causing deployment failures.
 
 **Solution**:
+
 - Updated bundling commands to explicitly copy only necessary files
 - Added `exclude` patterns: `venv`, `__pycache__`, `tests`, `*.pyc`, `*.pyo`
 - Created `.dockerignore` files as additional safeguard
@@ -171,12 +219,14 @@ vocab_recommendation/
 ## Deployment Checklist
 
 ### Epic 1: Infrastructure ✅
+
 1. ✅ Deploy CDK stack: `cdk deploy --require-approval never`
 2. ✅ Verify all resources created (S3, DynamoDB, SQS, IAM roles)
 3. ✅ Run unit tests: `npm test` (25 tests passing)
 4. ✅ Verify CloudFormation outputs exported
 
 ### Epic 2: API Layer ✅
+
 1. ✅ Create API Lambda with FastAPI + Mangum
 2. ✅ Create S3 upload trigger Lambda
 3. ✅ Configure API Gateway with CORS
@@ -186,14 +236,16 @@ vocab_recommendation/
 7. ✅ Configure Python dependency bundling in CDK
 
 ### Epic 3: Processing ✅
+
 1. ✅ Migrated processor from Lambda to ECS Fargate (due to 250MB size limit)
 2. ✅ Created ECS Fargate worker service with SQS polling
-2. ✅ Test Bedrock integration (Claude 3 Sonnet)
-3. ✅ Monitor CloudWatch logs
-4. ✅ Fix DynamoDB compatibility issues (float/Decimal, reserved keywords)
-5. ✅ End-to-end testing complete (`test_processing.py`)
+3. ✅ Test Bedrock integration (Claude 3 Sonnet)
+4. ✅ Monitor CloudWatch logs
+5. ✅ Fix DynamoDB compatibility issues (float/Decimal, reserved keywords)
+6. ✅ End-to-end testing complete (`test_processing.py`)
 
 ### Epic 4: Frontend ✅
+
 1. ✅ Initialize React project with Vite + TypeScript
 2. ✅ Set up Tailwind CSS v4 with PostCSS
 3. ✅ Initialize shadcn/ui and install components
@@ -207,31 +259,37 @@ vocab_recommendation/
 ## Common Issues
 
 ### spaCy Model Not Found
+
 - **Issue**: `OSError: Can't find model 'en_core_web_sm'`
 - **Solution**: Ensure layer is built correctly and attached to Lambda
 - **Status**: ✅ Resolved - Using Docker container with model pre-installed
 
 ### Bedrock Access Denied
+
 - **Issue**: `AccessDeniedException` when invoking model
 - **Solution**: Check IAM role has `bedrock:InvokeModel` permission
 - **Status**: ✅ Resolved - IAM permissions configured correctly
 
 ### SQS Message Format
+
 - **Issue**: Processor Lambda can't parse SQS message
 - **Solution**: S3 event notification wraps message in `Records` array
 - **Status**: ✅ Resolved - Message parsing implemented correctly
 
 ### Lambda Timeout
+
 - **Issue**: Processing takes > 5 minutes
 - **Solution**: Increase timeout, optimize Bedrock calls (batch if possible)
 - **Status**: ✅ Resolved - Processing completes in ~37 seconds for typical essay
 
 ### DynamoDB Float Type Error
+
 - **Issue**: `TypeError: Float types are not supported. Use Decimal types instead.`
 - **Solution**: Convert all float values to Decimal before storing in DynamoDB
 - **Status**: ✅ Fixed - Added `convert_floats_to_decimal()` function
 
 ### DynamoDB Reserved Keyword Error
+
 - **Issue**: `ValidationException: Attribute name is a reserved keyword; reserved keyword: metrics`
 - **Solution**: Use ExpressionAttributeNames for reserved keywords in UpdateExpression
 - **Status**: ✅ Fixed - Updated `update_dynamodb()` to use ExpressionAttributeNames for "metrics" and "feedback"
@@ -250,6 +308,7 @@ vocab_recommendation/
 ## Testing Strategy
 
 ### CDK Infrastructure Tests ✅
+
 1. ✅ **Unit Tests**: 25 tests covering all CDK resources
    - S3 bucket configuration
    - DynamoDB table schema
@@ -260,6 +319,7 @@ vocab_recommendation/
    - Run with: `npm test`
 
 ### API Integration Tests ✅
+
 1. ✅ **Integration Tests**: Created `test_api.py` with 6 tests
    - Health endpoint
    - POST /essay (direct upload)
@@ -269,7 +329,9 @@ vocab_recommendation/
    - All tests passing
 
 ### Lambda Function Tests ✅
+
 1. ✅ **End-to-End Integration Test (Legacy Flow)**: `test_processing.py`
+
    - Tests complete flow: upload → S3 → SQS → Processor → DynamoDB
    - Validates metrics calculation (word count, unique words, type-token ratio, POS distribution)
    - Validates Bedrock feedback generation (20 words evaluated)
@@ -279,6 +341,7 @@ vocab_recommendation/
    - Processing time: ~30-35 seconds for typical essay
 
 2. ✅ **End-to-End Integration Test (Assignment Flow)**: `test_assignment_flow.py`
+
    - Tests assignment creation → presigned URL → file upload → S3 trigger → processing
    - Tests both single file and zip file uploads
    - Validates student name extraction and matching
@@ -286,12 +349,14 @@ vocab_recommendation/
    - All tests passing ✅
 
 3. ✅ **Epic 7 Integration Tests**: `test_epic7.py`
+
    - Tests Students CRUD operations (create, list, get, update, delete)
    - Tests Assignments CRUD operations (create, list, get, presigned URL)
    - Tests authentication and authorization
    - All tests passing ✅
 
 4. ✅ **Unit Tests**:
+
    - `lambda/api/tests/test_students.py` - Student database operations (all passing)
    - `lambda/api/tests/test_assignments.py` - Assignment database operations (all passing)
    - `lambda/s3_upload_trigger/tests/test_name_extraction.py` - Name extraction patterns (all passing)
@@ -300,7 +365,9 @@ vocab_recommendation/
 6. ⏳ **Error Tests**: Test DLQ, timeout, and error scenarios (future enhancement)
 
 ### Frontend Tests ✅
+
 1. ✅ **API Client Tests**: `lib/api.test.ts` (4 tests)
+
    - Upload essay functionality
    - Get essay functionality
    - Health check
@@ -308,6 +375,7 @@ vocab_recommendation/
    - All tests passing ✅
 
 2. ✅ **Component Tests**: `App.test.tsx` (12 tests)
+
    - Initial render and form display
    - Button enable/disable logic
    - Empty text validation
@@ -320,6 +388,7 @@ vocab_recommendation/
    - All tests passing ✅
 
 3. ✅ **Auth Unit Tests**: `__tests__/auth.test.tsx` (13 tests)
+
    - Login/logout functions
    - Token storage and retrieval
    - Authentication status checks
@@ -327,16 +396,19 @@ vocab_recommendation/
    - All tests passing ✅ (jsdom environment)
 
 4. **Test Coverage**: 29/29 tests passing (unit tests in `frontend/`)
+
    - Framework: Vitest + React Testing Library
    - Mocking: API functions mocked for component tests
    - User interactions: Tested with `@testing-library/user-event`
 
 5. ✅ **Frontend Build Fixes**:
+
    - Fixed Vite 7 build issue by renaming `main.tsx` to `main.jsx` and using JavaScript entry point
    - Updated Vite config to handle `.js` files with JSX syntax
    - Build now completes successfully ✅
 
 6. 🔄 **Frontend Migration to `new_frontend/`** (2025-01-XX):
+
    - **Reason**: Suspected configuration issues in original `frontend/` directory
    - **New Stack**: Bun runtime + Vite 7.2 + React 19 + TypeScript
    - **Configuration Preserved**: Tailwind v4 CSS-first config (`@theme` in `index.css`)
@@ -358,18 +430,22 @@ vocab_recommendation/
 ## Epic 1 Implementation Details
 
 ### Resources Created
+
 - **S3 Bucket**: `vocab-essays-{account}-{region}`
+
   - Auto-delete on stack deletion
   - S3-managed encryption
   - CORS enabled for web uploads
   - Public access blocked
 
 - **DynamoDB Table**: `EssayMetrics`
+
   - Partition key: `essay_id` (String)
   - On-demand billing
   - AWS-managed encryption
 
 - **SQS Queues**:
+
   - `essay-processing-queue`: Main queue, 5min visibility timeout
   - `essay-processing-dlq`: Dead-letter queue, 3 retry attempts
 
@@ -379,12 +455,15 @@ vocab_recommendation/
   - `ProcessorLambdaRole`: For essay processor Lambda (Epic 3)
 
 ### Stack Outputs
+
 All resource names and ARNs are exported as CloudFormation outputs for easy reference in subsequent epics.
 
 ## Epic 2 Implementation Details
 
 ### Lambda Functions Created
+
 - **API Lambda** (`lambda/api/`):
+
   - FastAPI application with 3 endpoints
   - Mangum adapter for Lambda integration
   - CORS middleware enabled
@@ -397,6 +476,7 @@ All resource names and ARNs are exported as CloudFormation outputs for easy refe
   - Environment variable: PROCESSING_QUEUE_URL
 
 ### API Gateway Configuration
+
 - **Base URL**: `https://m18eg6bei9.execute-api.us-east-1.amazonaws.com/prod/`
 - **Endpoints**:
   - `POST /essay` - Create essay (direct upload or presigned URL)
@@ -405,15 +485,17 @@ All resource names and ARNs are exported as CloudFormation outputs for easy refe
 - **CORS**: Enabled for all origins
 
 ### Python Dependency Bundling
+
 - CDK configured to bundle Python dependencies using Docker
 - Bundling skipped during tests (`CDK_SKIP_BUNDLING=true`)
 - Dependencies automatically installed during deployment
 
 ### Testing
+
 - **CDK Tests**: 52/54 passing (2 skipped, infrastructure validation)
 - **Backend Python Tests**: 49/49 passing (JWT, Students, Assignments, Essays, Metrics)
 - **Name Extraction Tests**: 13/13 passing
-- **Integration Tests**: 
+- **Integration Tests**:
   - `test_auth.py`: 3/3 passing
   - `test_epic7.py`: Passing (requires auth token for full tests)
   - `test_epic8.py`: All passing (Class metrics, Student metrics, Essay override)
@@ -429,12 +511,14 @@ All resource names and ARNs are exported as CloudFormation outputs for easy refe
 **Purpose:** Complete backend testing workflow without frontend dependency
 
 **Files:**
+
 - `BACKEND_E2E_TEST_GUIDE.md`: Step-by-step guide with AWS CLI and curl commands
 - `submit_essays.sh`: Automated script to submit essays from `data/` directory
 - `.e2e_config.example`: Configuration template
 - `trigger_student_aggregation.sh`: Manual trigger for student metrics aggregation
 
 **Workflow:**
+
 1. Authenticate with Cognito (AWS CLI)
 2. Create assignment (API)
 3. Create students (API)
@@ -450,6 +534,7 @@ All resource names and ARNs are exported as CloudFormation outputs for easy refe
 13. Optional: Test override functionality (API)
 
 **Validation:**
+
 - ✅ Complete pipeline tested end-to-end
 - ✅ Sam Williams metrics: 1 essay, avg_ttr: 1.0, avg_word_count: 86
 - ✅ Alex Johnson metrics: 2 essays, avg_ttr: 0.877, avg_word_count: 71
@@ -458,6 +543,7 @@ All resource names and ARNs are exported as CloudFormation outputs for easy refe
 ## Epic 6 Implementation Details (Authentication & Teacher Management)
 
 ### Cognito User Pool Setup
+
 - **User Pool Name:** `vincent-vocab-teachers-pool`
 - **Sign-in:** Email only (no username)
 - **Password Policy:** 8+ chars, uppercase, lowercase, digits, no symbols required
@@ -468,12 +554,14 @@ All resource names and ARNs are exported as CloudFormation outputs for easy refe
 - **Domain:** `vincent-vocab-971422717446.auth.us-east-1.amazoncognito.com`
 
 ### API Gateway Authorizer
+
 - **Type:** Cognito User Pools Authorizer
 - **Identity Source:** `method.request.header.Authorization`
 - **Protected Routes:** All routes except `/health`
 - **Public Routes:** `/health` (no auth required)
 
 ### JWT Validation
+
 - **Library:** `python-jose[cryptography]` for JWT verification
 - **JWKS:** Fetched from Cognito `.well-known/jwks.json` endpoint
 - **Caching:** JWKS cached in memory after first fetch
@@ -485,12 +573,14 @@ All resource names and ARNs are exported as CloudFormation outputs for easy refe
   - Result: Script-created Cognito users can now authenticate successfully
 
 ### Teachers Table
+
 - **Table Name:** `VincentVocabTeachers`
 - **Partition Key:** `teacher_id` (String) - from Cognito `sub` claim
 - **Attributes:** `email`, `name`, `created_at`, `updated_at`
 - **Auto-creation:** Teacher records created on first `/auth/health` call
 
 ### Code Structure Changes
+
 - **Issue:** Package conflict between `app.py` (FastAPI app) and `app/` (package directory)
 - **Solution:** Renamed `app.py` → `main.py` to avoid import conflicts
 - **Import Path:** `lambda_function.py` now imports `from main import app`
@@ -512,6 +602,7 @@ All resource names and ARNs are exported as CloudFormation outputs for easy refe
   ```
 
 ### Deployment Notes
+
 - **Deployment Time:** ~50 seconds
 - **Lambda Code Update:** CDK automatically bundles and uploads on `cdk deploy`
 - **Code SHA Changed:** Confirmed new code deployed (SHA: `nR0F60...`)
@@ -520,17 +611,19 @@ All resource names and ARNs are exported as CloudFormation outputs for easy refe
 ## Epic 8 Implementation Details (Analytics & Teacher Review Interface)
 
 ### Backend Implementation
+
 - **StudentMetrics Table**: Created with partition key `teacher_id`, sort key `student_id`
-- **Metrics Endpoints**: 
+- **Metrics Endpoints**:
   - `/metrics/class/{assignment_id}` - Returns ClassMetrics for assignment
   - `/metrics/student/{student_id}` - Returns StudentMetrics for student
 - **Essay Override Endpoint**: `/essays/{id}/override` (PATCH) - Updates feedback and triggers aggregation
-- **Aggregation Lambdas**: 
+- **Aggregation Lambdas**:
   - `class_metrics.py` - Computes assignment-level averages
   - `student_metrics.py` - Computes student-level rolling averages
 - **Testing**: All unit and integration tests passing
 
 ### Frontend Implementation
+
 - **Class Dashboard**: Displays assignment-level metrics with Recharts visualizations
 - **Student Dashboard**: Shows student-level metrics over time with essay list
 - **Essay Review Page**: Editable feedback view with override toggles
@@ -538,9 +631,10 @@ All resource names and ARNs are exported as CloudFormation outputs for easy refe
 - **Authentication**: AWS Amplify integration with protected routes
 
 ### Frontend Migration (2025-01-XX)
+
 - **New Directory**: `new_frontend/` with Bun + Vite 7.2
 - **Configuration**: Preserved Tailwind v4 CSS-first config
-- **TypeScript Fixes**: 
+- **TypeScript Fixes**:
   - Added `declare const process` for environment variable types
   - Fixed `verbatimModuleSyntax` with `import type` statements
   - Fixed missing icon imports
@@ -549,6 +643,7 @@ All resource names and ARNs are exported as CloudFormation outputs for easy refe
 ## Epic 4 Implementation Details
 
 ### Frontend Application
+
 - **Framework**: React 19 with TypeScript
 - **Build Tool**: Vite 7.2 (migrated to Bun runtime in `new_frontend/`)
 - **Styling**: Tailwind CSS v4 with shadcn/ui components
@@ -556,6 +651,7 @@ All resource names and ARNs are exported as CloudFormation outputs for easy refe
 - **Migration**: Frontend migrated from `frontend/` to `new_frontend/` (2025-01-XX)
 
 ### shadcn/ui Setup
+
 - **Configuration**: `components.json` with path aliases
 - **Components Installed**:
   - `Button` - Primary actions with variants (default, secondary, destructive)
@@ -565,12 +661,14 @@ All resource names and ARNs are exported as CloudFormation outputs for easy refe
 - **Dependencies**: `@radix-ui/react-slot` for Button component
 
 ### Tailwind CSS v4 Configuration
+
 - **PostCSS Plugin**: `@tailwindcss/postcss`
 - **Theme System**: CSS variables defined in `@theme` block
 - **Color Palette**: shadcn/ui default colors (slate base)
 - **Custom Colors**: background, foreground, primary, secondary, muted, destructive, etc.
 
 ### Application Features
+
 - **Essay Upload**: Textarea input with validation
 - **Processing Status**: Real-time polling (3-second intervals) with visual indicators
 - **Metrics Display**: Word count, unique words, type-token ratio, POS distribution
@@ -579,16 +677,17 @@ All resource names and ARNs are exported as CloudFormation outputs for easy refe
 - **Form Reset**: "Analyze Another Essay" functionality
 
 ### API Integration
+
 - **Client Module**: `lib/api.ts` with typed interfaces
 - **Endpoints**: `uploadEssay()`, `getEssay()`, `checkHealth()`
 - **Environment**: Configurable API URL via `VITE_API_URL`
 - **Error Handling**: Proper error messages and status codes
 
 ### Testing
+
 - **Test Framework**: Vitest with jsdom environment
-- **Test Files**: 
+- **Test Files**:
   - `lib/api.test.ts` - API client tests (4 tests)
   - `App.test.tsx` - Component tests (12 tests)
 - **Coverage**: 16/16 tests passing
 - **Test Types**: Unit tests, integration tests, user interaction tests
-

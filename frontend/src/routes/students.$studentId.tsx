@@ -77,16 +77,9 @@ function StudentDetailPage() {
   }
 
   // Build time-series data from real essays
-  const timeSeriesData = essays && essays.length >= 2 ? essays.map((essay) => {
-    const date = new Date(essay.created_at)
-    // Format date as "MMM DD" (e.g., "Jan 15")
-    const formattedDate = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-    return {
-      date: formattedDate,
-      ttr: toNumber(essay.metrics.type_token_ratio),
-      wordCount: toNumber(essay.metrics.word_count),
-    }
-  }) : []
+  // Note: Old metrics (type_token_ratio, word_count) are no longer available
+  // Vocabulary analysis doesn't include these metrics, so time series is disabled
+  const timeSeriesData: Array<{ date: string; ttr: number; wordCount: number }> = []
 
   if (studentLoading) {
     return (

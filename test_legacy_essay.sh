@@ -91,7 +91,7 @@ echo ""
 
 # Check if we have vocabulary_analysis (new OpenAI format)
 if [ "$HAS_VOCAB_ANALYSIS" -gt 0 ]; then
-  echo -e "${GREEN}Vocabulary Analysis (OpenAI GPT-4o-mini)${NC}"
+  echo -e "${GREEN}Vocabulary Analysis (OpenAI GPT-4.1-mini)${NC}"
   echo ""
   
   # Extract and display correctness review
@@ -160,6 +160,6 @@ echo -e "${GREEN}Test completed successfully!${NC}"
 echo -e "  Essay ID: ${BLUE}${ESSAY_ID}${NC}"
 echo -e "  API URL: ${BLUE}${API_URL}${NC}"
 if [ "$HAS_VOCAB_ANALYSIS" -gt 0 ]; then
-  echo -e "  Analysis: ${GREEN}OpenAI GPT-4o-mini${NC}"
+  echo -e "  Analysis: ${GREEN}OpenAI GPT-4.1-mini${NC}"
 fi
 

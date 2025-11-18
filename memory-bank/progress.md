@@ -578,6 +578,53 @@
 
 ---
 
+### ✅ Simplified Async Architecture Migration - COMPLETE
+
+**Completed:** 2025-01-18
+
+**Summary:**
+- Migrated from ECS Fargate + spaCy + Bedrock to fully serverless Worker Lambda + OpenAI
+- Removed all legacy infrastructure (ECS, S3 triggers, aggregation Lambdas, metrics tables)
+- Implemented unified async processing pipeline: Upload → API Lambda → SQS → Worker Lambda → DynamoDB
+- Created batch upload endpoint for multiple essays
+- Added public demo endpoint for unauthenticated users
+- Updated frontend to match new backend schema
+- Successfully deployed to AWS
+
+**Key Changes:**
+- **New Worker Lambda**: Processes essays via SQS events, calls OpenAI GPT-4.1-mini
+- **New Essays Table**: Simplified schema with vocabulary_analysis field
+- **Batch Upload Endpoint**: `POST /essays/batch` accepts multiple essays (authenticated)
+- **Public Demo Endpoint**: `POST /essays/public` accepts single essay (no auth required)
+- **Removed**: ECS Fargate, S3 Upload Trigger Lambda, Aggregation Lambdas, EssayUpdateQueue, Metrics tables
+- **Frontend**: Updated to use vocabulary_analysis, removed legacy metrics/feedback references
+
+**Resources Deployed:**
+- Worker Lambda: `vincent-vocab-worker-lambda` (SQS-triggered)
+- Essays Table: `VincentVocabEssays` (assignment_id/essay_id keys)
+- EssayProcessingQueue: `vincent-vocab-essay-processing-queue` + DLQ
+- API Gateway: `/essays/batch` (protected) and `/essays/public` (public) endpoints
+
+**CORS Configuration:**
+- API Gateway: Allows `https://vocab.vincentchan.cloud`, `http://localhost:3000`, `http://localhost:5173`
+- FastAPI: CORS middleware with same origins + exception handlers for error responses
+- All error responses include CORS headers
+
+**Testing:**
+- CDK deployment: ✅ Success (with dependency bundling)
+- Frontend build: ✅ Success (`bun run build`)
+- TypeScript compilation: ✅ No errors
+- Public endpoint: ✅ Verified via curl
+- Worker Lambda: ✅ Processing essays successfully
+- Full pipeline: ✅ Upload → Process → Retrieve working end-to-end
+
+**Critical Fixes:**
+- **Dependency Bundling**: Removed `CDK_SKIP_BUNDLING=true` to ensure Python dependencies are installed
+- **CORS Headers**: Added global exception handlers to ensure CORS headers in all error responses
+- **Public Endpoint**: Created `/essays/public` for unauthenticated demo functionality
+
+---
+
 ### 🔄 Frontend Rebuild (TanStack Router + Bun) - IN PROGRESS
 
 **Status:** Epic 2 Complete, Ready for Epic 3

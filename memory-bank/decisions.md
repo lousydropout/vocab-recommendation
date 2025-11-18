@@ -94,6 +94,51 @@
 
 ---
 
+### D-011: Public Demo Endpoint (Supersedes D-010)
+**Date**: 2025-01-18  
+**Status**: Accepted  
+**Context**: Need to allow unauthenticated users to try the demo on the home page  
+**Decision**: Create public `/essays/public` endpoint that doesn't require authentication  
+**Rationale**:
+- Enables demo functionality without requiring user registration
+- Uses special demo IDs (`demo-teacher`, `demo-public-assignment`) to isolate demo essays
+- Same async processing pipeline as authenticated uploads
+- GET endpoint allows public access to demo essays only
+
+**Implementation Details**:
+- `POST /essays/public` accepts `{ essay_text }` without auth
+- Creates essays with `teacher_id: "demo-teacher"`
+- `GET /essays/{essay_id}` uses optional auth - allows public access to demo essays
+- Frontend polls for results same as authenticated flow
+
+**Alternatives Considered**:
+- Require login for demo: Reduces friction but adds barrier
+- Separate demo service: Over-engineered for simple use case
+
+---
+
+### D-012: CORS Configuration for Development
+**Date**: 2025-01-18  
+**Status**: Accepted  
+**Context**: Frontend development on localhost needs CORS access to API  
+**Decision**: Configure CORS to allow both production domain and localhost ports  
+**Rationale**:
+- Enables local development without CORS errors
+- Supports multiple development ports (3000, 5173)
+- Production domain remains secure
+
+**Implementation Details**:
+- API Gateway: `defaultCorsPreflightOptions` with explicit origin list
+- FastAPI: CORS middleware with same origin list
+- Global exception handlers ensure CORS headers in error responses
+- Origin validation prevents unauthorized origins
+
+**Critical Fix**:
+- Added global exception handlers to ensure CORS headers are always present
+- Prevents CORS errors even when Lambda throws exceptions (502 errors)
+
+---
+
 ### D-005: Two Processing Flows (Legacy vs Assignment)
 **Date**: 2025-11-11  
 **Status**: Accepted  

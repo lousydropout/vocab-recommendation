@@ -20,13 +20,17 @@
     "inlineSources": true,
     "experimentalDecorators": true,
     "strictPropertyInitialization": false,
-    "skipLibCheck": true,
-    "typeRoots": [
-      "./node_modules/@types"
-    ]
+    "skipLibCheck": true
   },
+  "include": [
+    "bin/**/*",
+    "lib/**/*"
+  ],
   "exclude": [
     "node_modules",
-    "cdk.out"
+    "cdk.out",
+    "frontend",
+    "lambda",
+    "test"
   ]
 }

@@ -1,6 +1,10 @@
 """
 Metrics API routes for Epic 8.
 Provides endpoints for class-level and student-level metrics.
+
+Note: Legacy metrics tables (ClassMetrics, StudentMetrics) have been removed.
+Metrics should be computed on-demand from the Essays table.
+These endpoints return placeholder responses for backward compatibility.
 """
 import os
 import boto3
@@ -17,11 +21,10 @@ router = APIRouter(prefix="/metrics", tags=["metrics"])
 
 # Initialize DynamoDB
 dynamodb = boto3.resource('dynamodb')
-CLASS_METRICS_TABLE = os.environ.get('CLASS_METRICS_TABLE')
-STUDENT_METRICS_TABLE = os.environ.get('STUDENT_METRICS_TABLE')
+ESSAYS_TABLE = os.environ.get('ESSAYS_TABLE')
 
-class_metrics_table = dynamodb.Table(CLASS_METRICS_TABLE) if CLASS_METRICS_TABLE else None
-student_metrics_table = dynamodb.Table(STUDENT_METRICS_TABLE) if STUDENT_METRICS_TABLE else None
+essays_table = dynamodb.Table(ESSAYS_TABLE) if ESSAYS_TABLE else None
+# Legacy CLASS_METRICS_TABLE and STUDENT_METRICS_TABLE removed - compute on-demand from Essays table
 
 
 class ClassMetricsResponse(BaseModel):
@@ -46,47 +49,29 @@ async def get_class_metrics(
     """
     Get class-level metrics for a specific assignment.
     
-    Returns pre-computed metrics from ClassMetrics table including:
-    - Average type-token ratio
-    - Average frequency rank
-    - Correctness distribution
-    - Essay count
+    Note: Legacy ClassMetrics table removed. This endpoint returns placeholder data.
+    Future implementation should compute metrics on-demand from Essays table.
     """
-    if not class_metrics_table:
-        raise HTTPException(status_code=500, detail="ClassMetrics table not configured")
+    if not essays_table:
+        raise HTTPException(status_code=500, detail="Essays table not configured")
     
     try:
-        response = class_metrics_table.get_item(
-            Key={
-                'teacher_id': teacher_ctx.teacher_id,
-                'assignment_id': assignment_id,
-            }
-        )
-        
-        if 'Item' not in response:
-            # Return empty metrics if not found
-            return ClassMetricsResponse(
-                assignment_id=assignment_id,
-                stats={
-                    'avg_ttr': 0.0,
-                    'avg_freq_rank': 0.0,
-                    'correctness': {'correct': 0.0, 'incorrect': 0.0},
-                    'essay_count': 0,
-                },
-                updated_at='',
-            )
-        
-        item = response['Item']
-        
-        logger.info("Class metrics retrieved", extra={
+        # TODO: Compute metrics on-demand from Essays table
+        # For now, return placeholder response
+        logger.info("Class metrics requested (placeholder)", extra={
             "teacher_id": teacher_ctx.teacher_id,
             "assignment_id": assignment_id,
         })
         
         return ClassMetricsResponse(
-            assignment_id=item['assignment_id'],
-            stats=item.get('stats', {}),
-            updated_at=item.get('updated_at', ''),
+            assignment_id=assignment_id,
+            stats={
+                'avg_ttr': 0.0,
+                'avg_freq_rank': 0.0,
+                'correctness': {'correct': 0.0, 'incorrect': 0.0},
+                'essay_count': 0,
+            },
+            updated_at='',
         )
         
     except Exception as e:
@@ -106,53 +91,32 @@ async def get_student_metrics(
     """
     Get student-level metrics for a specific student.
     
-    Returns pre-computed rolling averages from StudentMetrics table including:
-    - Average type-token ratio
-    - Average word count
-    - Average unique words
-    - Average frequency rank
-    - Total essays
-    - Trend (improving/stable/declining/null - null when < 2 essays)
-    - Last essay date
+    Note: Legacy StudentMetrics table removed. This endpoint returns placeholder data.
+    Future implementation should compute metrics on-demand from Essays table.
     """
-    if not student_metrics_table:
-        raise HTTPException(status_code=500, detail="StudentMetrics table not configured")
+    if not essays_table:
+        raise HTTPException(status_code=500, detail="Essays table not configured")
     
     try:
-        response = student_metrics_table.get_item(
-            Key={
-                'teacher_id': teacher_ctx.teacher_id,
-                'student_id': student_id,
-            }
-        )
-        
-        if 'Item' not in response:
-            # Return empty metrics if not found
-            return StudentMetricsResponse(
-                student_id=student_id,
-                stats={
-                    'avg_ttr': 0.0,
-                    'avg_word_count': 0.0,
-                    'avg_unique_words': 0.0,
-                    'avg_freq_rank': 0.0,
-                    'total_essays': 0,
-                    'trend': None,
-                    'last_essay_date': None,
-                },
-                updated_at='',
-            )
-        
-        item = response['Item']
-        
-        logger.info("Student metrics retrieved", extra={
+        # TODO: Compute metrics on-demand from Essays table
+        # For now, return placeholder response
+        logger.info("Student metrics requested (placeholder)", extra={
             "teacher_id": teacher_ctx.teacher_id,
             "student_id": student_id,
         })
         
         return StudentMetricsResponse(
-            student_id=item['student_id'],
-            stats=item.get('stats', {}),
-            updated_at=item.get('updated_at', ''),
+            student_id=student_id,
+            stats={
+                'avg_ttr': 0.0,
+                'avg_word_count': 0.0,
+                'avg_unique_words': 0.0,
+                'avg_freq_rank': 0.0,
+                'total_essays': 0,
+                'trend': None,
+                'last_essay_date': None,
+            },
+            updated_at='',
         )
         
     except Exception as e:

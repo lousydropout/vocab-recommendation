@@ -1,176 +1,184 @@
 # Data Models
 
-## Phase 1: PoC Tables (Epics 1-5) - COMPLETE
+## Current Schema (Simplified Async Architecture - 2025-01-XX)
 
-### DynamoDB Table: `EssayMetrics`
+### DynamoDB Table: `Essays` (VincentVocabEssays)
 
-**Current Schema (Phase 1):**
+**Schema:**
 
-| Attribute       | Type                | Key                    | Description                                        |
-|----------------|---------------------|------------------------|----------------------------------------------------|
-| `essay_id`      | `String`            | **Partition Key (PK)** | Unique UUID per essay                              |
-| `status`        | `String`            |                        | `awaiting_processing` / `processing` / `processed` |
-| `file_key`      | `String`            |                        | S3 object path                                     |
-| `metrics`       | `Map`               |                        | Lexical stats from spaCy                           |
-| `feedback`      | `List<Map>`         |                        | Bedrock word-level evaluations                     |
-| `created_at`    | `String (ISO8601)`  |                        | Upload timestamp                                   |
-| `updated_at`    | `String (ISO8601)`  |                        | Last update                                        |
-| `student_id`    | `String` (optional) |                        | Future expansion — group essays by student         |
-| `grade`         | `Number` (optional) |                        | Grade-level grouping                               |
-| `assignment_id` | `String` (optional) |                        | Multi-essay expansion                              |
-| `model_version` | `String` (optional) |                        | Track spaCy/Bedrock versions used                  |
+| Attribute             | Type                   | Key                    | Description                                                 |
+| --------------------- | ---------------------- | ---------------------- | ----------------------------------------------------------- |
+| `assignment_id`       | `String`               | **Partition Key (PK)** | Assignment this essay belongs to                            |
+| `essay_id`            | `String`               | **Sort Key (SK)**      | Unique UUID per essay                                       |
+| `teacher_id`          | `String`               |                        | Teacher who owns this essay                                 |
+| `student_id`          | `String`               |                        | Student who wrote this essay (empty string if not assigned) |
+| `essay_text`          | `String`               |                        | Full essay text content (max 400KB per item)                |
+| `vocabulary_analysis` | `Map`                  |                        | OpenAI GPT-4.1-mini analysis result (see structure below)   |
+| `status`              | `String`               |                        | `"pending"` / `"processed"`                                 |
+| `created_at`          | `String (ISO8601)`     |                        | Essay creation timestamp                                    |
+| `processed_at`        | `String (ISO8601)`     |                        | Processing completion timestamp (optional)                  |
+| `feedback`            | `List<Map>` (optional) |                        | Teacher override feedback (optional, for future use)        |
 
-**Updated Schema (Phase 2 - Epics 6-8):**
+**Vocabulary Analysis Structure:**
 
-| Attribute       | Type                | Key                    | Description                                        |
-|----------------|---------------------|------------------------|----------------------------------------------------|
-| `teacher_id#assignment_id` | `String` | **Partition Key (PK)** | Composite key for teacher/assignment isolation |
-| `student_id#essay_id` | `String` | **Sort Key (SK)** | Composite key for student/essay lookup |
-| `status`        | `String`            |                        | `awaiting_processing` / `processing` / `processed` |
-| `file_key`      | `String`            |                        | S3 object path                                     |
-| `metrics`       | `Map`               |                        | Lexical stats from spaCy                           |
-| `feedback`      | `List<Map>`         |                        | Bedrock word-level evaluations (with override flags) |
-| `created_at`    | `String (ISO8601)`  |                        | Upload timestamp                                   |
-| `updated_at`    | `String (ISO8601)`  |                        | Last update                                        |
-| `teacher_id`    | `String`            |                        | **Required** - Teacher who owns this essay |
-| `student_id`    | `String`            |                        | **Required** - Student who wrote this essay |
-| `assignment_id` | `String`            |                        | **Required** - Assignment this essay belongs to |
-| `model_version` | `String` (optional) |                        | Track spaCy/Bedrock versions used                  |
+```typescript
+interface VocabularyAnalysis {
+  correctness_review: string; // High-level review (2-3 sentences)
+  vocabulary_used: string[]; // 5-10 words/phrases showing current level
+  recommended_vocabulary: string[]; // 5-10 words for growth
+}
+```
 
-## Phase 2: Multi-Essay Teaching Platform Tables (Epics 6-8) - IN PROGRESS
+**Example Record:**
+
+```json
+{
+  "assignment_id": "assn_123",
+  "essay_id": "essay_456",
+  "teacher_id": "teacher_789",
+  "student_id": "student_abc",
+  "essay_text": "The quick brown fox jumps over the lazy dog...",
+  "vocabulary_analysis": {
+    "correctness_review": "The student demonstrates solid vocabulary usage with appropriate word choices...",
+    "vocabulary_used": ["demonstrates", "appropriate", "solid", "usage"],
+    "recommended_vocabulary": [
+      "articulate",
+      "sophisticated",
+      "nuanced",
+      "eloquent"
+    ]
+  },
+  "status": "processed",
+  "created_at": "2025-01-18T12:00:00Z",
+  "processed_at": "2025-01-18T12:00:15Z"
+}
+```
+
+**Status Values:**
+
+- `"pending"`: Essay uploaded, waiting for Worker Lambda processing
+- `"processed"`: Analysis complete, vocabulary_analysis available
+
+**Note:** Maximum item size must stay under 400KB. If essays exceed this, essay_text should be offloaded to S3 (not currently implemented).
+
+## Metadata Tables
+
+### DynamoDB Table: `Teachers` (VincentVocabTeachers)
 
 ### DynamoDB Table: `Teachers`
 
-| Attribute       | Type                | Key                    | Description                                        |
-|----------------|---------------------|------------------------|----------------------------------------------------|
-| `teacher_id`    | `String`            | **Partition Key (PK)** | Unique UUID per teacher (from Cognito sub) |
-| `email`         | `String`            |                        | Teacher email address                              |
-| `name`          | `String`            |                        | Teacher full name                                  |
-| `created_at`    | `String (ISO8601)`  |                        | Account creation timestamp                         |
-| `updated_at`    | `String (ISO8601)`  |                        | Last update                                        |
+| Attribute    | Type               | Key                    | Description                                |
+| ------------ | ------------------ | ---------------------- | ------------------------------------------ |
+| `teacher_id` | `String`           | **Partition Key (PK)** | Unique UUID per teacher (from Cognito sub) |
+| `email`      | `String`           |                        | Teacher email address                      |
+| `name`       | `String`           |                        | Teacher full name                          |
+| `created_at` | `String (ISO8601)` |                        | Account creation timestamp                 |
+| `updated_at` | `String (ISO8601)` |                        | Last update                                |
 
 ### DynamoDB Table: `Students`
 
-| Attribute       | Type                | Key                    | Description                                        |
-|----------------|---------------------|------------------------|----------------------------------------------------|
-| `teacher_id`    | `String`            | **Partition Key (PK)** | Teacher who owns this student |
-| `student_id`    | `String`            | **Sort Key (SK)** | Unique UUID per student |
-| `name`          | `String`            |                        | Student full name                                  |
-| `created_at`    | `String (ISO8601)`  |                        | Student record creation timestamp                  |
-| `updated_at`    | `String (ISO8601)`  |                        | Last update                                        |
+| Attribute    | Type               | Key                    | Description                       |
+| ------------ | ------------------ | ---------------------- | --------------------------------- |
+| `teacher_id` | `String`           | **Partition Key (PK)** | Teacher who owns this student     |
+| `student_id` | `String`           | **Sort Key (SK)**      | Unique UUID per student           |
+| `name`       | `String`           |                        | Student full name                 |
+| `created_at` | `String (ISO8601)` |                        | Student record creation timestamp |
+| `updated_at` | `String (ISO8601)` |                        | Last update                       |
 
 ### DynamoDB Table: `Assignments`
 
-| Attribute       | Type                | Key                    | Description                                        |
-|----------------|---------------------|------------------------|----------------------------------------------------|
+| Attribute       | Type                | Key                    | Description                      |
+| --------------- | ------------------- | ---------------------- | -------------------------------- |
 | `teacher_id`    | `String`            | **Partition Key (PK)** | Teacher who owns this assignment |
-| `assignment_id` | `String`            | **Sort Key (SK)** | Unique UUID per assignment |
-| `title`         | `String`            |                        | Assignment title                                   |
-| `description`   | `String` (optional) |                        | Assignment description                             |
-| `created_at`    | `String (ISO8601)`  |                        | Assignment creation timestamp                      |
-| `updated_at`    | `String (ISO8601)`  |                        | Last update                                        |
+| `assignment_id` | `String`            | **Sort Key (SK)**      | Unique UUID per assignment       |
+| `title`         | `String`            |                        | Assignment title                 |
+| `description`   | `String` (optional) |                        | Assignment description           |
+| `created_at`    | `String (ISO8601)`  |                        | Assignment creation timestamp    |
+| `updated_at`    | `String (ISO8601)`  |                        | Last update                      |
 
-### DynamoDB Table: `ClassMetrics`
+### DynamoDB Table: `Assignments` (VincentVocabAssignments)
 
-| Attribute       | Type                | Key                    | Description                                        |
-|----------------|---------------------|------------------------|----------------------------------------------------|
+| Attribute       | Type                | Key                    | Description                      |
+| --------------- | ------------------- | ---------------------- | -------------------------------- |
 | `teacher_id`    | `String`            | **Partition Key (PK)** | Teacher who owns this assignment |
-| `assignment_id` | `String`            | **Sort Key (SK)** | Assignment ID |
-| `avg_type_token_ratio` | `Number` |                        | Average TTR across all essays in assignment |
-| `avg_word_count` | `Number` |                        | Average word count |
-| `avg_unique_words` | `Number` |                        | Average unique words |
-| `total_essays`  | `Number`            |                        | Total number of essays processed |
-| `correctness_rate` | `Number` |                        | Percentage of words marked correct |
-| `updated_at`    | `String (ISO8601)`  |                        | Last aggregation timestamp                        |
+| `assignment_id` | `String`            | **Sort Key (SK)**      | Unique UUID per assignment       |
+| `title`         | `String`            |                        | Assignment title                 |
+| `description`   | `String` (optional) |                        | Assignment description           |
+| `created_at`    | `String (ISO8601)`  |                        | Assignment creation timestamp    |
 
-### DynamoDB Table: `StudentMetrics`
+**Note:** Assignments table is a simple metadata table. No computed fields, no metrics, no aggregation.
 
-| Attribute       | Type                | Key                    | Description                                        |
-|----------------|---------------------|------------------------|----------------------------------------------------|
-| `teacher_id`    | `String`            | **Partition Key (PK)** | Teacher who owns this student |
-| `student_id`    | `String`            | **Sort Key (SK)** | Student ID |
-| `avg_type_token_ratio` | `Number` |                        | Rolling average TTR over time |
-| `avg_word_count` | `Number` |                        | Rolling average word count |
-| `total_essays`  | `Number`            |                        | Total essays processed for this student |
-| `trend`         | `String`            |                        | `improving` / `stable` / `declining` |
-| `last_essay_date` | `String (ISO8601)` |                        | Date of most recent essay |
-| `updated_at`    | `String (ISO8601)`  |                        | Last aggregation timestamp                        |
+## Removed Tables (Legacy Architecture)
 
-### Example Record
-
-```json
-{
-  "essay_id": "essay_2025_0001",
-  "status": "processed",
-  "file_key": "essays/essay_2025_0001.txt",
-  "metrics": {
-    "word_count": 478,
-    "unique_words": 212,
-    "type_token_ratio": 0.44,
-    "noun_ratio": 0.29,
-    "verb_ratio": 0.21,
-    "avg_word_freq_rank": 1750
-  },
-  "feedback": [
-    {
-      "word": "articulated",
-      "correct": false,
-      "comment": "Used incorrectly; too formal"
-    },
-    {
-      "word": "rapidly",
-      "correct": true,
-      "comment": ""
-    }
-  ],
-  "created_at": "2025-11-10T17:31:00Z",
-  "updated_at": "2025-11-10T17:32:30Z"
-}
-```
-
-### Status Values
-
-- `awaiting_processing`: Essay uploaded, waiting for processing
-- `processing`: Currently being analyzed
-- `processed`: Analysis complete, results available
-
-## Metrics Structure
-
-```typescript
-interface Metrics {
-  word_count: number;
-  unique_words: number;
-  type_token_ratio: number;  // unique_words / word_count
-  noun_ratio: number;
-  verb_ratio: number;
-  avg_word_freq_rank: number;  // Average frequency rank (SUBTLEX/COCA)
-}
-```
-
-## Feedback Structure
-
-```typescript
-interface FeedbackItem {
-  word: string;
-  correct: boolean;
-  comment: string;
-}
-
-type Feedback = FeedbackItem[];
-```
+- ❌ **EssayMetrics**: Replaced by Essays table
+- ❌ **ClassMetrics**: Metrics computed on-demand from Essays table
+- ❌ **StudentMetrics**: Metrics computed on-demand from Essays table
 
 ## SQS Message Format
 
+**EssayProcessingQueue Message:**
+
 ```json
 {
-  "essay_id": "uuid-here",
-  "file_key": "essays/uuid-here.txt"
+  "teacher_id": "teacher_789",
+  "assignment_id": "assn_123",
+  "student_id": "student_abc",
+  "essay_id": "essay_456"
 }
 ```
 
-## S3 Object Structure
+**Important:** SQS messages contain ONLY IDs - no essay_text. Worker Lambda loads essay_text from DynamoDB to avoid 256KB SQS message size limit.
 
-- **Bucket**: `vocab-essays-{account}-{region}`
-- **Key Pattern**: `essays/{essay_id}.txt`
-- **Content**: Plain text essay content
+## API Request/Response Formats
 
+### POST /essays/batch Request
+
+```json
+{
+  "assignment_id": "assn_123",
+  "student_id": "student_abc", // optional
+  "essays": [
+    {
+      "filename": "essay1.txt",
+      "text": "Essay content here..."
+    },
+    {
+      "filename": "essay2.txt",
+      "text": "Another essay..."
+    }
+  ]
+}
+```
+
+### POST /essays/batch Response
+
+```json
+[
+  {
+    "essay_id": "essay_456",
+    "status": "pending"
+  },
+  {
+    "essay_id": "essay_789",
+    "status": "pending"
+  }
+]
+```
+
+### GET /essays/{essay_id} Response
+
+```json
+{
+  "essay_id": "essay_456",
+  "assignment_id": "assn_123",
+  "student_id": "student_abc",
+  "status": "processed",
+  "vocabulary_analysis": {
+    "correctness_review": "...",
+    "vocabulary_used": ["word1", "word2"],
+    "recommended_vocabulary": ["word3", "word4"]
+  },
+  "created_at": "2025-01-18T12:00:00Z",
+  "processed_at": "2025-01-18T12:00:15Z"
+}
+```

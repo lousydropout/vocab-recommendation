@@ -8,16 +8,21 @@ https://{api-id}.execute-api.{region}.amazonaws.com/prod
 
 ## Authentication
 
-All endpoints except `/health` require authentication via Cognito JWT token.
+Most endpoints require authentication via Cognito JWT token. Public endpoints are available for demo purposes.
 
 **Authorization Header:**
 ```
 Authorization: Bearer <cognito-id-token>
 ```
 
-**Unauthenticated Requests:**
-- Return `401 Unauthorized` or `403 Forbidden`
-- `/health` endpoint is public (no auth required)
+**Public Endpoints (No Auth Required):**
+- `/health` - Health check
+- `/essays/public` - Public demo essay upload
+- `/essays/{essay_id}` - Get essay (works for both authenticated users and public demo essays)
+
+**Protected Endpoints (Auth Required):**
+- All other endpoints require valid JWT token
+- Return `401 Unauthorized` or `403 Forbidden` if missing/invalid
 
 ## Endpoints
 
@@ -56,24 +61,18 @@ Auth health check endpoint. Validates JWT token and ensures teacher record exist
 
 ---
 
-### POST /essay
+### POST /essays/public
 
-Create a new essay analysis request.
+Public endpoint for demo essay upload (no authentication required).
 
 **Headers:**
-- `Authorization: Bearer <token>` (required)
+- `Content-Type: application/json`
+- `Origin: http://localhost:3000` (or other allowed origin)
 
-**Request Body** (Option 1 - Direct Upload):
+**Request Body:**
 ```json
 {
   "essay_text": "The complete essay text here..."
-}
-```
-
-**Request Body** (Option 2 - Presigned URL):
-```json
-{
-  "request_presigned_url": true
 }
 ```
 
@@ -81,22 +80,67 @@ Create a new essay analysis request.
 ```json
 {
   "essay_id": "550e8400-e29b-41d4-a716-446655440000",
-  "status": "awaiting_processing",
-  "presigned_url": "https://s3.amazonaws.com/...",  // Only if requested
-  "expires_in": 3600  // Only if presigned_url provided
+  "status": "pending"
 }
 ```
 
 **Response** (400 Bad Request):
 ```json
 {
-  "detail": "Invalid request: essay_text or request_presigned_url required"
+  "detail": "Essay text is required"
 }
+```
+
+**Notes:**
+- Creates essay with `teacher_id: "demo-teacher"` and `assignment_id: "demo-public-assignment"`
+- Processes through same async pipeline as authenticated uploads
+- Results accessible via `GET /essays/{essay_id}` (no auth required for demo essays)
+
+---
+
+### POST /essays/batch
+
+Batch upload multiple essays (authentication required).
+
+**Headers:**
+- `Authorization: Bearer <token>` (required)
+- `Content-Type: application/json`
+
+**Request Body:**
+```json
+{
+  "assignment_id": "assignment-uuid",
+  "student_id": "student-uuid",  // optional
+  "essays": [
+    {
+      "filename": "essay1.txt",
+      "text": "Essay content here..."
+    },
+    {
+      "filename": "essay2.txt",
+      "text": "Another essay..."
+    }
+  ]
+}
+```
+
+**Response** (200 OK):
+```json
+[
+  {
+    "essay_id": "essay-uuid-1",
+    "status": "pending"
+  },
+  {
+    "essay_id": "essay-uuid-2",
+    "status": "pending"
+  }
+]
 ```
 
 ---
 
-### GET /essay/{essay_id}
+### GET /essays/{essay_id}
 
 Retrieve essay analysis results.
 
@@ -175,8 +219,21 @@ All errors follow this format:
 
 ## CORS
 
-All endpoints support CORS with:
-- `Access-Control-Allow-Origin: *`
-- `Access-Control-Allow-Methods: GET, POST, OPTIONS`
-- `Access-Control-Allow-Headers: Content-Type`
+All endpoints support CORS with the following configuration:
+
+**Allowed Origins:**
+- `https://vocab.vincentchan.cloud` (production)
+- `http://localhost:3000` (development)
+- `http://localhost:5173` (Vite default port)
+
+**CORS Headers:**
+- `Access-Control-Allow-Origin: <origin>` (validated against allowed list)
+- `Access-Control-Allow-Credentials: true`
+- `Access-Control-Allow-Methods: *`
+- `Access-Control-Allow-Headers: *`
+- `Access-Control-Expose-Headers: *`
+
+**Error Responses:**
+- All error responses (400, 401, 403, 500, etc.) include CORS headers
+- Global exception handlers ensure CORS headers are always present
 

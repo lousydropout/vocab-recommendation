@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { requireAuth } from '../utils/route-protection'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { getAssignment, getClassMetrics, getAssignmentUploadUrl, listStudents, getStudentMetrics } from '../api/client'
+import { getAssignment, getClassMetrics, listStudents, getStudentMetrics, uploadBatchEssays } from '../api/client'
 import type { AssignmentResponse, StudentResponse, StudentMetricsResponse } from '../types/api'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
 import { Button } from '../components/ui/button'
@@ -137,57 +137,44 @@ function AssignmentDetailPage() {
     setUploadSuccess(null)
 
     try {
-      // Filter for .txt files or .zip files
-      const validFiles = files.filter(
-        (file) => file.name.endsWith('.txt') || file.name.endsWith('.zip')
-      )
+      // Filter for .txt files only (no ZIP support in new architecture)
+      const validFiles = files.filter((file) => file.name.endsWith('.txt'))
 
       if (validFiles.length === 0) {
-        setUploadError('Please upload .txt files or a .zip archive')
+        setUploadError('Please upload .txt files')
         setIsUploading(false)
         return
       }
 
-      const uploadedFileNames: string[] = []
-      
-      // Upload each file
-      for (const file of validFiles) {
-        try {
-          // Get presigned URL
-          const uploadData = await getAssignmentUploadUrl(assignmentId, file.name)
-
-          // Upload to S3 using presigned URL
-          const uploadResponse = await fetch(uploadData.presigned_url, {
-            method: 'PUT',
-            body: file,
-            headers: {
-              'Content-Type': file.type || 'text/plain',
-            },
-          })
-
-          if (!uploadResponse.ok) {
-            throw new Error(`Failed to upload ${file.name}`)
+      // Read all files as text
+      const essayItems = await Promise.all(
+        validFiles.map(async (file) => {
+          const text = await file.text()
+          return {
+            filename: file.name,
+            text: text,
           }
-          
-          uploadedFileNames.push(file.name)
-        } catch (err) {
-          console.error(`Error uploading ${file.name}:`, err)
-          setUploadError(`Failed to upload ${file.name}: ${err instanceof Error ? err.message : 'Unknown error'}`)
-        }
-      }
+        })
+      )
 
-      if (uploadedFileNames.length > 0) {
+      // Upload batch via API
+      const results = await uploadBatchEssays(assignmentId, undefined, essayItems)
+
+      if (results.length > 0) {
+        const uploadedFileNames = validFiles.map(f => f.name)
         setUploadedFiles(prev => [...prev, ...uploadedFileNames])
-        setUploadSuccess(`Successfully uploaded ${uploadedFileNames.length} file(s). Processing will begin shortly.`)
+        setUploadSuccess(`Successfully uploaded ${results.length} essay(s). Processing will begin shortly.`)
         // Invalidate metrics query to trigger refresh
         queryClient.invalidateQueries({ queryKey: ['class-metrics', assignmentId] })
-        // Also set up delayed refreshes to check for updates
-        setTimeout(() => {
+        // Set up polling to check for processed essays
+        const pollInterval = setInterval(() => {
           queryClient.invalidateQueries({ queryKey: ['class-metrics', assignmentId] })
-        }, 5000)
+        }, 3000) // Poll every 3 seconds
+        
+        // Stop polling after 5 minutes
         setTimeout(() => {
-          queryClient.invalidateQueries({ queryKey: ['class-metrics', assignmentId] })
-        }, 15000)
+          clearInterval(pollInterval)
+        }, 300000)
       }
     } catch (err) {
       setUploadError(err instanceof Error ? err.message : 'Failed to upload files')
@@ -372,7 +359,7 @@ function AssignmentDetailPage() {
             Upload Essays
           </CardTitle>
           <CardDescription>
-            Upload .txt files or a .zip archive containing multiple essays
+            Drag and drop multiple .txt files to upload essays for processing
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -428,7 +415,7 @@ function AssignmentDetailPage() {
               type="file"
               id="file-upload"
               multiple
-              accept=".txt,.zip"
+              accept=".txt"
               onChange={handleFileInput}
               disabled={isUploading}
               className="hidden"
@@ -446,7 +433,7 @@ function AssignmentDetailPage() {
                     Drag and drop files here, or click to select
                   </p>
                   <p className="text-sm text-muted-foreground">
-                    Supports .txt files and .zip archives
+                    Supports multiple .txt files
                   </p>
                 </div>
               )}
