@@ -1,501 +1,377 @@
-import { createFileRoute, Link } from '@tanstack/react-router'
-import { useState, useEffect } from 'react'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
-import { Button } from '../components/ui/button'
-import { Textarea } from '../components/ui/textarea'
-import { Alert, AlertDescription } from '../components/ui/alert'
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { Card, CardContent } from "../components/ui/card";
+import { Button } from "../components/ui/button";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '../components/ui/select'
-import { Loader2, CheckCircle2, XCircle, LogIn, BookOpen } from 'lucide-react'
-import { config } from '../utils/config'
-import type { EssayResponse } from '../types/api'
+  LogIn,
+  BookOpen,
+  Users,
+  Brain,
+  BarChart3,
+  Download,
+  GraduationCap,
+  UserCheck,
+  School,
+} from "lucide-react";
 
-export const Route = createFileRoute('/')({
+export const Route = createFileRoute("/")({
   component: HomePage,
-})
-
-// Available example essays
-const EXAMPLE_ESSAYS = [
-  { filename: 'Brooks_Jackson.txt', displayName: 'Essay 1 - Brooks Jackson' },
-  { filename: 'Carter_Zoe.txt', displayName: 'Essay 2 - Carter Zoe' },
-  { filename: 'Cooper_Dylan.txt', displayName: 'Essay 3 - Cooper Dylan' },
-  { filename: 'Greene_Ethan.txt', displayName: 'Essay 4 - Greene Ethan' },
-  { filename: 'Hassan_Aria.txt', displayName: 'Essay 5 - Hassan Aria' },
-  { filename: 'Johnson_Marcus.txt', displayName: 'Essay 6 - Johnson Marcus' },
-  { filename: 'Kim_Ava.txt', displayName: 'Essay 7 - Kim Ava' },
-  { filename: 'Lopez_Sofia.txt', displayName: 'Essay 8 - Lopez Sofia' },
-  { filename: 'Martinez_Chloe.txt', displayName: 'Essay 9 - Martinez Chloe' },
-  { filename: 'Nguyen_Emily.txt', displayName: 'Essay 10 - Nguyen Emily' },
-  { filename: 'Patel_Noah.txt', displayName: 'Essay 11 - Patel Noah' },
-  { filename: 'Reyes_Natalie.txt', displayName: 'Essay 12 - Reyes Natalie' },
-  { filename: 'Rodriguez_Liam.txt', displayName: 'Essay 13 - Rodriguez Liam' },
-  { filename: 'Thompson_Maya.txt', displayName: 'Essay 14 - Thompson Maya' },
-  { filename: 'Walsh_Henry.txt', displayName: 'Essay 15 - Walsh Henry' },
-]
-
-/**
- * Extract student name from the first line of essay text.
- * Handles both "FirstName LastName" and "LastName FirstName" formats.
- * Also handles common prefixes like "Name:" or suffixes like "— Grade".
- * 
- * @param essayText - The full essay text
- * @returns The extracted student name, or null if not found
- */
-function extractStudentName(essayText: string): string | null {
-  const firstLine = essayText.split('\n')[0]?.trim()
-  if (!firstLine) return null
-  
-  // Remove common prefixes like "Name:" or "Name -"
-  let name = firstLine.replace(/^Name:\s*/i, '').trim()
-  
-  // Remove suffixes like "— Grade 10" or "- Grade 10"
-  name = name.replace(/\s*[—–-]\s*Grade\s*\d+.*$/i, '').trim()
-  name = name.replace(/\s*[—–-].*$/, '').trim()
-  
-  // Normalize multiple spaces to single space
-  name = name.replace(/\s+/g, ' ').trim()
-  
-  if (!name) return null
-  
-  return name
-}
+});
 
 function HomePage() {
-  const [essayText, setEssayText] = useState('')
-  const [status, setStatus] = useState<'idle' | 'uploading' | 'processing' | 'completed' | 'error'>('idle')
-  const [essay, setEssay] = useState<EssayResponse | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const [studentValidationError, setStudentValidationError] = useState<string | null>(null)
-  const [isCheckingStudent, setIsCheckingStudent] = useState(false)
-  const [pollingInterval, setPollingInterval] = useState<NodeJS.Timeout | null>(null)
-  const [selectedEssay, setSelectedEssay] = useState<string>('none')
-  const [isLoadingEssay, setIsLoadingEssay] = useState(false)
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!essayText.trim()) {
-      setError('Please enter some essay text')
-      return
-    }
-
-    // Extract student name from first line
-    const studentName = extractStudentName(essayText)
-    if (!studentName) {
-      setError('Could not extract student name from the first line of the essay. Please ensure the first line contains the student name (e.g., "Zoe Carter" or "Carter Zoe").')
-      setStatus('error')
-      return
-    }
-
-    setError(null)
-    setStatus('uploading')
-    setEssay(null)
-
-    try {
-      // Call public endpoint for demo
-      const response = await fetch(`${config.API_URL}/essays/public`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          essay_text: essayText,
-          student_name: studentName,
-        }),
-      })
-
-      if (!response.ok) {
-        const errorText = await response.text().catch(() => response.statusText)
-        // Try to parse error message if it's JSON
-        let errorMessage = errorText
-        try {
-          const errorJson = JSON.parse(errorText)
-          if (errorJson.detail) {
-            errorMessage = errorJson.detail
-          }
-        } catch {
-          // Not JSON, use as-is
-        }
-        throw new Error(errorMessage || `Failed to upload essay: ${response.status}`)
-      }
-
-      const result = await response.json()
-      const essayId = result.essay_id
-
-      // Start polling for results
-      setStatus('processing')
-      startPolling(essayId)
-    } catch (err: any) {
-      setError(err.message || 'Failed to upload essay')
-      setStatus('error')
-    }
-  }
-
-  const startPolling = (essayId: string) => {
-    // Clear any existing polling
-    if (pollingInterval) {
-      clearInterval(pollingInterval)
-    }
-
-    const interval = setInterval(async () => {
-      try {
-        const response = await fetch(`${config.API_URL}/essays/${essayId}`)
-        if (!response.ok) {
-          if (response.status === 404) {
-            // Essay not found yet, keep polling
-            return
-          }
-          throw new Error(`Failed to fetch essay: ${response.status}`)
-        }
-
-        const result: EssayResponse = await response.json()
-        setEssay(result)
-        
-        if (result.status === 'processed') {
-          setStatus('completed')
-          clearInterval(interval)
-          setPollingInterval(null)
-        } else if (result.status === 'pending') {
-          setStatus('processing')
-        }
-      } catch (err: any) {
-        console.error('Polling error:', err)
-        // Continue polling even on error (might be temporary)
-      }
-    }, 3000) // Poll every 3 seconds
-
-    setPollingInterval(interval)
-  }
-
-
-  useEffect(() => {
-    // Cleanup polling on unmount
-    return () => {
-      if (pollingInterval) {
-        clearInterval(pollingInterval)
-      }
-    }
-  }, [pollingInterval])
-
-  const handleReset = () => {
-    setEssayText('')
-    setStatus('idle')
-    setEssay(null)
-    setError(null)
-    setSelectedEssay('none')
-    if (pollingInterval) {
-      clearInterval(pollingInterval)
-      setPollingInterval(null)
-    }
-  }
-
-  const loadEssay = async (filename: string) => {
-    if (filename === 'none') {
-      setEssayText('')
-      setSelectedEssay('none')
-      setError(null)
-      return
-    }
-
-    setIsLoadingEssay(true)
-    setError(null)
-    try {
-      const response = await fetch(`/essays/${filename}`)
-      if (!response.ok) {
-        throw new Error(`Failed to load essay: ${response.statusText}`)
-      }
-      const text = await response.text()
-      setEssayText(text)
-      setSelectedEssay(filename)
-      // Reset status when loading a new essay
-      setStatus('idle')
-      setEssay(null)
-    } catch (err: any) {
-      setError(err.message || 'Failed to load essay')
-      setSelectedEssay('none')
-    } finally {
-      setIsLoadingEssay(false)
-    }
-  }
-
-  const handleEssaySelect = (value: string) => {
-    loadEssay(value)
-  }
-
-  // Debounced student validation when essay text changes
-  useEffect(() => {
-    // Check if student exists
-    const checkStudentExists = async (studentName: string) => {
-      if (!studentName || !studentName.trim()) {
-        setStudentValidationError(null)
-        return
-      }
-
-      setIsCheckingStudent(true)
-      try {
-        const response = await fetch(
-          `${config.API_URL}/essays/public/check-student?student_name=${encodeURIComponent(studentName)}`
-        )
-
-        if (response.status === 404) {
-          const errorData = await response.json().catch(() => ({ detail: 'Student not found' }))
-          setStudentValidationError(errorData.detail || `Student "${studentName}" not found. Please ensure the student exists in the system.`)
-        } else if (!response.ok) {
-          // Other errors - don't show validation error, let submit handle it
-          setStudentValidationError(null)
-        } else {
-          // Student exists - clear any previous error
-          setStudentValidationError(null)
-        }
-      } catch (err) {
-        // Network or other errors - don't show validation error
-        setStudentValidationError(null)
-      } finally {
-        setIsCheckingStudent(false)
-      }
-    }
-
-    // Clear previous timeout
-    const timeoutId = setTimeout(() => {
-      const studentName = extractStudentName(essayText)
-      if (studentName) {
-        checkStudentExists(studentName)
-      } else {
-        // No name extracted - clear validation error
-        setStudentValidationError(null)
-      }
-    }, 500) // Wait 500ms after user stops typing
-
-    return () => clearTimeout(timeoutId)
-  }, [essayText])
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
       <div className="container mx-auto px-4 py-12 max-w-4xl">
         {/* Header */}
-        <div className="text-center mb-8">
+        <div className="text-center mb-12">
           <h1 className="text-5xl font-bold bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 bg-clip-text text-transparent mb-4">
-            Vocabulary Essay Analyzer
+            VocabLens Classroom
           </h1>
-          <p className="text-lg text-muted-foreground mb-6">
-            Analyze your essay's vocabulary diversity, difficulty, and contextual correctness
+          <p className="text-xl text-muted-foreground mb-6">
+            Help your students grow from "using words" to{" "}
+            <strong>owning</strong> them.
           </p>
           <Link to="/login">
-            <Button variant="outline" className="gap-2">
-              <LogIn className="h-4 w-4" />
-              Teacher Login
+            <Button size="lg" className="gap-2">
+              <LogIn className="h-5 w-5" />
+              Log in to your account
             </Button>
           </Link>
         </div>
 
-        {/* Upload Form */}
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <BookOpen className="h-5 w-5" />
-              Upload Essay
-            </CardTitle>
-            <CardDescription>
-              Paste your essay text below and click "Analyze" to get started
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="space-y-2">
-                <label htmlFor="essay-select" className="text-sm font-medium">
-                  Load Example Essay (Optional)
-                </label>
-                <Select
-                  value={selectedEssay}
-                  onValueChange={handleEssaySelect}
-                  disabled={status === 'uploading' || status === 'processing' || isLoadingEssay}
-                >
-                  <SelectTrigger id="essay-select">
-                    <SelectValue placeholder="Select an example essay..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">None</SelectItem>
-                    {EXAMPLE_ESSAYS.map((essay) => (
-                      <SelectItem key={essay.filename} value={essay.filename}>
-                        {essay.displayName}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <Textarea
-                value={essayText}
-                onChange={(e) => {
-                  setEssayText(e.target.value)
-                  // Clear selection if user manually edits
-                  if (selectedEssay !== 'none') {
-                    setSelectedEssay('none')
-                  }
-                }}
-                placeholder="Paste your essay here or select an example essay above..."
-                rows={12}
-                disabled={status === 'uploading' || status === 'processing' || isLoadingEssay}
-                className="font-mono text-sm"
-              />
-              
-              {studentValidationError && (
-                <Alert variant="destructive">
-                  <XCircle className="h-4 w-4" />
-                  <AlertDescription>
-                    {studentValidationError}
-                    {isCheckingStudent && ' (checking...)'}
-                  </AlertDescription>
-                </Alert>
-              )}
-              
-              {error && !studentValidationError && (
-                <Alert variant="destructive">
-                  <XCircle className="h-4 w-4" />
-                  <AlertDescription>{error}</AlertDescription>
-                </Alert>
-              )}
+        <div className="h-px bg-gradient-to-r from-transparent via-gray-300 to-transparent my-12" />
 
-              <div className="flex gap-2">
-                <Button
-                  type="submit"
-                  disabled={status === 'uploading' || status === 'processing' || !essayText.trim() || !!studentValidationError}
-                  className="flex-1"
-                >
-                  {status === 'uploading' || status === 'processing' ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      {status === 'uploading' ? 'Uploading...' : 'Processing...'}
-                    </>
-                  ) : (
-                    'Analyze Essay'
-                  )}
-                </Button>
-                {(status === 'completed' || status === 'error') && (
-                  <Button type="button" variant="outline" onClick={handleReset}>
-                    Reset
-                  </Button>
-                )}
-              </div>
-            </form>
-          </CardContent>
-        </Card>
-
-        {/* Status Indicator */}
-        {status === 'processing' && (
+        {/* What this app does */}
+        <section className="mb-12">
+          <h2 className="text-3xl font-bold mb-6">What this app does</h2>
           <Card className="mb-6">
             <CardContent className="pt-6">
-              <div className="flex items-center justify-center gap-3">
-                <Loader2 className="h-5 w-5 animate-spin text-blue-600" />
-                <p className="text-muted-foreground">
-                  Your essay is being processed. This may take 30-60 seconds...
-                </p>
+              <p className="text-lg text-muted-foreground mb-6">
+                VocabLens helps you quickly understand each student's vocabulary
+                level and gives you targeted word recommendations — without
+                spending hours grading.
+              </p>
+              <div className="space-y-4">
+                <h3 className="text-xl font-semibold mb-4">You can:</h3>
+                <ul className="space-y-3 text-muted-foreground">
+                  <li className="flex items-start gap-3">
+                    <span className="text-xl">✏️</span>
+                    <span>Create assignments for your classes</span>
+                  </li>
+                  <li className="flex items-start gap-3">
+                    <span className="text-xl">👩‍🎓</span>
+                    <span>Add students and track their progress</span>
+                  </li>
+                  <li className="flex items-start gap-3">
+                    <span className="text-xl">📄</span>
+                    <span>Collect essay submissions (DOCX / text)</span>
+                  </li>
+                  <li className="flex items-start gap-3">
+                    <span className="text-xl">🤖</span>
+                    <span>
+                      Run AI analysis on each essay:
+                      <ul className="ml-8 mt-2 space-y-2 list-disc">
+                        <li>
+                          Words that signal the student's current vocabulary
+                          level
+                        </li>
+                        <li>
+                          Analysis of word and phrase usage (correct vs.
+                          incorrect / awkward)
+                        </li>
+                        <li>Recommended new words tailored to that student</li>
+                      </ul>
+                    </span>
+                  </li>
+                </ul>
               </div>
             </CardContent>
           </Card>
-        )}
+        </section>
 
-        {/* Results */}
-        {status === 'completed' && essay && (
+        <div className="h-px bg-gradient-to-r from-transparent via-gray-300 to-transparent my-12" />
+
+        {/* Who it's for */}
+        <section className="mb-12">
+          <h2 className="text-3xl font-bold mb-6">Who it's for</h2>
+          <Card>
+            <CardContent className="pt-6">
+              <ul className="space-y-3 text-muted-foreground">
+                <li className="flex items-center gap-3">
+                  <GraduationCap className="h-5 w-5 text-blue-600" />
+                  <span>Middle school and high school English teachers</span>
+                </li>
+                <li className="flex items-center gap-3">
+                  <UserCheck className="h-5 w-5 text-indigo-600" />
+                  <span>Tutors and intervention specialists</span>
+                </li>
+                <li className="flex items-center gap-3">
+                  <School className="h-5 w-5 text-purple-600" />
+                  <span>
+                    Schools that want data-informed writing support without a
+                    giant grading platform
+                  </span>
+                </li>
+              </ul>
+            </CardContent>
+          </Card>
+        </section>
+
+        <div className="h-px bg-gradient-to-r from-transparent via-gray-300 to-transparent my-12" />
+
+        {/* How it works */}
+        <section className="mb-12">
+          <h2 className="text-3xl font-bold mb-6">How it works</h2>
           <div className="space-y-6">
-            {essay.vocabulary_analysis ? (
-              // New OpenAI-based vocabulary analysis (legacy/public version)
-              <>
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <CheckCircle2 className="h-5 w-5 text-green-600" />
-                      Vocabulary Analysis Complete
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-6">
-                      {/* Correctness Review */}
-                      <div>
-                        <h3 className="text-lg font-semibold mb-2">Overall Review</h3>
-                        <p className="text-muted-foreground leading-relaxed">
-                          {essay.vocabulary_analysis.correctness_review}
-                        </p>
-                      </div>
+            <Card>
+              <CardContent className="pt-6">
+                <div className="flex items-start gap-4">
+                  <div className="flex-shrink-0 w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold">
+                    1
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-semibold mb-2">
+                      Create an assignment
+                    </h3>
+                    <p className="text-muted-foreground">
+                      Give it a title, prompt, due date, and class/section
+                    </p>
+                    <p className="text-sm text-muted-foreground mt-1 italic">
+                      Optional: upload instructions or rubric
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
 
-                      {/* Vocabulary Used */}
-                      {essay.vocabulary_analysis.vocabulary_used.length > 0 && (
-                        <div>
-                          <h3 className="text-lg font-semibold mb-3">
-                            Vocabulary Demonstrating Your Current Level
-                          </h3>
-                          <div className="flex flex-wrap gap-2">
-                            {essay.vocabulary_analysis.vocabulary_used.map((word, index) => (
-                              <span
-                                key={index}
-                                className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm font-medium"
-                              >
-                                {word}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                      )}
+            <Card>
+              <CardContent className="pt-6">
+                <div className="flex items-start gap-4">
+                  <div className="flex-shrink-0 w-8 h-8 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center font-bold">
+                    2
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-semibold mb-2">
+                      Add or import students
+                    </h3>
+                    <p className="text-muted-foreground">
+                      Add manually or bulk-import from CSV
+                    </p>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Group by class / section
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
 
-                      {/* Recommended Vocabulary */}
-                      {essay.vocabulary_analysis.recommended_vocabulary.length > 0 && (
-                        <div>
-                          <h3 className="text-lg font-semibold mb-3">
-                            Recommended Vocabulary to Expand Your Skills
-                          </h3>
-                          <div className="flex flex-wrap gap-2">
-                            {essay.vocabulary_analysis.recommended_vocabulary.map((word, index) => (
-                              <span
-                                key={index}
-                                className="px-3 py-1 bg-purple-100 text-purple-800 rounded-full text-sm font-medium"
-                              >
-                                {word}
-                              </span>
-                            ))}
-                          </div>
-                          <p className="text-sm text-muted-foreground mt-3">
-                            These words match or slightly exceed your current level and would help you grow as a writer.
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
-              </>
-            ) : (
-              // Essay processed but no vocabulary_analysis available
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <CheckCircle2 className="h-5 w-5 text-green-600" />
-                    Analysis Complete
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-muted-foreground">
-                    Essay has been processed, but vocabulary analysis is not available.
-                  </p>
-                </CardContent>
-              </Card>
-            )}
+            <Card>
+              <CardContent className="pt-6">
+                <div className="flex items-start gap-4">
+                  <div className="flex-shrink-0 w-8 h-8 rounded-full bg-purple-100 text-purple-600 flex items-center justify-center font-bold">
+                    3
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-semibold mb-2">
+                      Collect essays
+                    </h3>
+                    <p className="text-muted-foreground">
+                      Students submit via a simple link or upload
+                    </p>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Support for{" "}
+                      <code className="px-1.5 py-0.5 bg-gray-100 rounded text-xs">
+                        .docx
+                      </code>{" "}
+                      and plain text
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
 
-            <div className="text-center">
-              <Link to="/login">
-                <Button variant="outline" className="gap-2">
-                  <LogIn className="h-4 w-4" />
-                  Login for Full Features
-                </Button>
-              </Link>
-              <p className="text-sm text-muted-foreground mt-2">
-                Teachers can create assignments, track students, and view detailed analytics
-              </p>
-            </div>
+            <Card>
+              <CardContent className="pt-6">
+                <div className="flex items-start gap-4">
+                  <div className="flex-shrink-0 w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold">
+                    4
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-semibold mb-2">
+                      Run AI analysis
+                    </h3>
+                    <p className="text-muted-foreground mb-2">
+                      For each essay, the app generates:
+                    </p>
+                    <ul className="list-disc list-inside space-y-1 text-muted-foreground ml-4">
+                      <li>Vocabulary-level indicator words</li>
+                      <li>Notes on correct/incorrect phrase usage</li>
+                      <li>A recommended word list for that student</li>
+                    </ul>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="pt-6">
+                <div className="flex items-start gap-4">
+                  <div className="flex-shrink-0 w-8 h-8 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center font-bold">
+                    5
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-semibold mb-2">Review & act</h3>
+                    <ul className="list-disc list-inside space-y-1 text-muted-foreground ml-4">
+                      <li>See per-student reports</li>
+                      <li>Compare across assignments</li>
+                      <li>Export results for conferences or IEP meetings</li>
+                    </ul>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
           </div>
-        )}
+
+          <div className="mt-8 text-center">
+            <Link to="/login">
+              <Button size="lg" className="gap-2">
+                <LogIn className="h-5 w-5" />
+                Log in to start analyzing essays
+              </Button>
+            </Link>
+          </div>
+        </section>
+
+        <div className="h-px bg-gradient-to-r from-transparent via-gray-300 to-transparent my-12" />
+
+        {/* Key features */}
+        <section className="mb-12">
+          <h2 className="text-3xl font-bold mb-6">Key features at a glance</h2>
+          <div className="grid md:grid-cols-2 gap-4">
+            <Card>
+              <CardContent className="pt-6">
+                <div className="flex items-start gap-3">
+                  <BookOpen className="h-6 w-6 text-blue-600 flex-shrink-0 mt-1" />
+                  <div>
+                    <h3 className="font-semibold mb-1">
+                      Per-student vocab profiles
+                    </h3>
+                    <p className="text-sm text-muted-foreground">
+                      See how a student changes over time
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="pt-6">
+                <div className="flex items-start gap-3">
+                  <Brain className="h-6 w-6 text-indigo-600 flex-shrink-0 mt-1" />
+                  <div>
+                    <h3 className="font-semibold mb-1">Usage feedback</h3>
+                    <p className="text-sm text-muted-foreground">
+                      Highlights misused or awkward phrases
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="pt-6">
+                <div className="flex items-start gap-3">
+                  <Users className="h-6 w-6 text-purple-600 flex-shrink-0 mt-1" />
+                  <div>
+                    <h3 className="font-semibold mb-1">
+                      Personalized recommendations
+                    </h3>
+                    <p className="text-sm text-muted-foreground">
+                      Words just above each student's current level
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="pt-6">
+                <div className="flex items-start gap-3">
+                  <BarChart3 className="h-6 w-6 text-blue-600 flex-shrink-0 mt-1" />
+                  <div>
+                    <h3 className="font-semibold mb-1">
+                      Assignment dashboards
+                    </h3>
+                    <p className="text-sm text-muted-foreground">
+                      Quickly scan which students need attention
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="md:col-span-2">
+              <CardContent className="pt-6">
+                <div className="flex items-start gap-3">
+                  <Download className="h-6 w-6 text-indigo-600 flex-shrink-0 mt-1" />
+                  <div>
+                    <h3 className="font-semibold mb-1">Exportable reports</h3>
+                    <p className="text-sm text-muted-foreground">
+                      Share with parents, admin, or other teachers
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </section>
+
+        <div className="h-px bg-gradient-to-r from-transparent via-gray-300 to-transparent my-12" />
+
+        {/* Example workflow */}
+        <section className="mb-12">
+          <h2 className="text-3xl font-bold mb-6">Example teacher workflow</h2>
+          <Card className="bg-blue-50 border-blue-200">
+            <CardContent className="pt-6">
+              <blockquote className="text-lg italic text-muted-foreground">
+                "I give a weekly writing prompt. Students upload their essays.
+                <br />
+                In a few minutes I get:
+                <ul className="list-disc list-inside space-y-1 mt-2 ml-4">
+                  <li>A sense of who's coasting vs. stretching</li>
+                  <li>Misused phrases I can turn into mini-lessons</li>
+                  <li>Personalized vocab lists I can assign as extensions."</li>
+                </ul>
+              </blockquote>
+            </CardContent>
+          </Card>
+        </section>
+
+        <div className="h-px bg-gradient-to-r from-transparent via-gray-300 to-transparent my-12" />
+
+        {/* Get started */}
+        <section className="mb-12">
+          <h2 className="text-3xl font-bold mb-6">Get started</h2>
+          <Card>
+            <CardContent className="pt-6 space-y-4">
+              <p className="text-muted-foreground">
+                <strong>New here?</strong> Ask your school leader or admin for
+                an invite link.
+              </p>
+              <p className="text-muted-foreground">
+                <strong>Already have an account?</strong>
+              </p>
+              <div className="pt-4">
+                <Link to="/login">
+                  <Button size="lg" className="gap-2">
+                    <LogIn className="h-5 w-5" />
+                    Log in
+                  </Button>
+                </Link>
+              </div>
+            </CardContent>
+          </Card>
+        </section>
       </div>
     </div>
-  )
+  );
 }
