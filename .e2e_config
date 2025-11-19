@@ -1,8 +1,0 @@
-export AWS_REGION="us-east-1"
-export COGNITO_USER_POOL_ID="us-east-1_65hpvHpPX"
-export COGNITO_CLIENT_ID="jhnvud4iqcf15vac6nc2d2b9p"
-export TEACHER_EMAIL="test-teacher@example.com"
-export TEACHER_PASSWORD="Test1234!"
-export API_URL="https://m18eg6bei9.execute-api.us-east-1.amazonaws.com/prod"
-export ESSAYS_BUCKET="vincent-vocab-essays-971422717446-us-east-1"
-export PROCESSING_QUEUE_URL="https://sqs.us-east-1.amazonaws.com/971422717446/vincent-vocab-essay-processing-queue"

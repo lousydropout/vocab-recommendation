@@ -112,7 +112,7 @@ function AssignmentDetailPage() {
 
   // Create a combined list of students from both Students table and essays
   // This ensures we show students even if they don't exist in the Students table
-  const students = useMemo(() => {
+  const students = useMemo<Array<{ student_id: string; name: string }>>(() => {
     if (!assignmentEssays) return []
     
     // Create a map of student_id -> student info
@@ -158,8 +158,6 @@ function AssignmentDetailPage() {
       .map((student) => ({
         student_id: student.student_id,
         name: student.name,
-        // Add other fields from Students table if available
-        ...(allStudents?.find((s) => s.student_id === student.student_id) || {}),
       }))
   }, [allStudents, assignmentEssays])
   
@@ -307,7 +305,7 @@ function AssignmentDetailPage() {
   }
 
   // Component to render a student row with their metrics
-  function StudentRow({ student }: { student: StudentResponse & { name: string } }) {
+  function StudentRow({ student }: { student: { student_id: string; name: string } }) {
     // Get essays for this student in this assignment
     const studentEssays = useMemo(() => {
       if (!assignmentEssays) return []

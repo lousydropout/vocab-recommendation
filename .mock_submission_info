@@ -1,0 +1,17 @@
+# Mock Essay Submission Information
+# Generated: Thu Nov 13 09:10:30 PM CST 2025
+
+ASSIGNMENT_ID="e855cb7a-387e-41bd-9a89-73ac20066975"
+API_URL="https://m18eg6bei9.execute-api.us-east-1.amazonaws.com/prod"
+TEACHER_ID="b4e85478-1001-70ba-9a0d-733fe615295e"
+ESSAY_COUNT="15"
+
+# Quick commands:
+# Check class metrics:
+# curl -H "Authorization: Bearer $(cat .jwt_token)" https://m18eg6bei9.execute-api.us-east-1.amazonaws.com/prod/metrics/class/e855cb7a-387e-41bd-9a89-73ac20066975 | jq
+
+# Check students:
+# aws dynamodb scan --table-name VincentVocabStudents --filter-expression "teacher_id = :tid" --expression-attribute-values "{\":tid\":{\"S\":\"b4e85478-1001-70ba-9a0d-733fe615295e\"}}" --region us-east-1 | jq
+
+# Check essays:
+# aws dynamodb scan --table-name VincentVocabEssayMetrics --filter-expression "assignment_id = :aid" --expression-attribute-values "{\":aid\":{\"S\":\"e855cb7a-387e-41bd-9a89-73ac20066975\"}}" --region us-east-1 | jq
