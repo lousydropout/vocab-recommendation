@@ -145,7 +145,7 @@ Batch upload multiple essays (authentication required).
 Retrieve essay analysis results.
 
 **Headers:**
-- `Authorization: Bearer <token>` (required)
+- `Authorization: Bearer <token>` (optional for demo essays, required for user essays)
 
 **Path Parameters**:
 - `essay_id` (string, required): UUID of the essay
@@ -154,30 +154,17 @@ Retrieve essay analysis results.
 ```json
 {
   "essay_id": "550e8400-e29b-41d4-a716-446655440000",
+  "assignment_id": "assignment-uuid",
+  "student_id": "student-uuid",
   "status": "processed",
-  "file_key": "essays/550e8400-e29b-41d4-a716-446655440000.txt",
-  "metrics": {
-    "word_count": 478,
-    "unique_words": 212,
-    "type_token_ratio": 0.44,
-    "noun_ratio": 0.29,
-    "verb_ratio": 0.21,
-    "avg_word_freq_rank": 1750
+  "essay_text": "Full essay text content...",
+  "vocabulary_analysis": {
+    "correctness_review": "Overall review of vocabulary usage...",
+    "vocabulary_used": ["word1", "word2", "word3"],
+    "recommended_vocabulary": ["word4", "word5"]
   },
-  "feedback": [
-    {
-      "word": "articulated",
-      "correct": false,
-      "comment": "Used incorrectly; too formal"
-    },
-    {
-      "word": "rapidly",
-      "correct": true,
-      "comment": ""
-    }
-  ],
   "created_at": "2025-11-10T17:31:00Z",
-  "updated_at": "2025-11-10T17:32:30Z"
+  "processed_at": "2025-11-10T17:32:30Z"
 }
 ```
 
@@ -192,12 +179,100 @@ Retrieve essay analysis results.
 ```json
 {
   "essay_id": "550e8400-e29b-41d4-a716-446655440000",
-  "status": "processing",
-  "file_key": "essays/550e8400-e29b-41d4-a716-446655440000.txt",
-  "created_at": "2025-11-10T17:31:00Z",
-  "updated_at": "2025-11-10T17:31:05Z"
+  "assignment_id": "assignment-uuid",
+  "student_id": "student-uuid",
+  "status": "pending",
+  "created_at": "2025-11-10T17:31:00Z"
 }
 ```
+
+**Notes:**
+- Works for both authenticated users (their essays) and public demo essays
+- Includes `essay_text` for reference when available
+- `vocabulary_analysis` only included when status is "processed"
+
+---
+
+### DELETE /essays/{essay_id}
+
+Delete an essay.
+
+**Headers:**
+- `Authorization: Bearer <token>` (required)
+
+**Path Parameters**:
+- `essay_id` (string, required): UUID of the essay
+
+**Response** (200 OK):
+```json
+{
+  "message": "Essay deleted successfully",
+  "essay_id": "550e8400-e29b-41d4-a716-446655440000"
+}
+```
+
+**Response** (404 Not Found):
+```json
+{
+  "detail": "Essay not found"
+}
+```
+
+**Response** (403 Forbidden):
+```json
+{
+  "detail": "Not authorized to delete this essay"
+}
+```
+
+**Notes:**
+- Only the essay owner (teacher_id matches) can delete the essay
+- Deletes the essay from DynamoDB permanently
+
+---
+
+### GET /metrics/assignment/{assignment_id}/student/{student_id}
+
+Get student-level metrics for a specific student in a specific assignment.
+
+**Headers:**
+- `Authorization: Bearer <token>` (required)
+
+**Path Parameters**:
+- `assignment_id` (string, required): UUID of the assignment
+- `student_id` (string, required): UUID of the student
+
+**Response** (200 OK):
+```json
+{
+  "student_id": "student-uuid",
+  "stats": {
+    "avg_ttr": 0.45,
+    "avg_word_count": 478.0,
+    "avg_unique_words": 212.0,
+    "avg_freq_rank": 1750.0,
+    "total_essays": 3,
+    "trend": null,
+    "last_essay_date": "2025-11-10T17:31:00Z"
+  },
+  "updated_at": "2025-11-10T17:32:30Z"
+}
+```
+
+**Response** (404 Not Found):
+```json
+{
+  "detail": "Student not found"
+}
+```
+
+**Notes:**
+- Computes metrics on-demand from processed essays in the Essays table
+- Only includes essays with status "processed"
+- Metrics are filtered by both assignment_id and student_id
+- Uses same computation logic as other metrics endpoints for consistency
+
+---
 
 ## Error Responses
 

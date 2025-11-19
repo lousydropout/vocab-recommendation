@@ -637,8 +637,82 @@ All resource names and ARNs are exported as CloudFormation outputs for easy refe
 - **TypeScript Fixes**:
   - Added `declare const process` for environment variable types
   - Fixed `verbatimModuleSyntax` with `import type` statements
-  - Fixed missing icon imports
-- **Build Status**: All TypeScript errors resolved, compilation successful
+
+## Recent Updates (2025-01-XX)
+
+### Metrics Computation Architecture Change
+
+**Date:** 2025-01-XX
+
+**Summary:**
+- Moved student metrics computation from frontend to backend for consistency and performance
+- Created new endpoint for assignment-scoped student metrics
+- Fixed issue where student metrics showed zeros in assignment detail view
+
+**Changes:**
+
+1. **New Backend Endpoint**: `GET /metrics/assignment/{assignment_id}/student/{student_id}`
+   - Computes metrics for a specific student in a specific assignment
+   - Uses same `compute_essay_metrics()` function as other endpoints for consistency
+   - Filters by assignment_id and student_id (more efficient than scanning all essays)
+   - Returns: avg_ttr, avg_word_count, avg_unique_words, avg_freq_rank
+
+2. **Backend Updates**:
+   - Added endpoint in `lambda/api/app/routes/metrics.py`
+   - Added API Gateway route in CDK stack
+   - Endpoint uses DynamoDB query (efficient) instead of scan
+
+3. **Frontend Updates**:
+   - Removed local metrics computation from `assignments.$assignmentId.tsx`
+   - Added `getStudentMetricsForAssignment()` API client function
+   - Updated `StudentRow` component to fetch metrics from backend
+   - Shows loading spinner while fetching metrics
+
+**Benefits:**
+- Single source of truth: metrics computed in one place (backend)
+- Consistency: same computation logic across all endpoints
+- Performance: computation on server, less data transfer
+- Correctness: metrics now correctly filtered by assignment
+
+### Essay Review Page Enhancements
+
+**Date:** 2025-01-XX
+
+**Summary:**
+- Enhanced essay review page with additional context and functionality
+- Added essay text display, student/assignment info, basic metrics, and delete functionality
+
+**Changes:**
+
+1. **Backend Updates**:
+   - Updated `GET /essays/{essay_id}` to include `essay_text` in response
+   - Added `DELETE /essays/{essay_id}` endpoint for essay deletion
+   - Delete endpoint requires authentication and verifies ownership
+
+2. **Frontend Updates**:
+   - **Essay Text Display**: Added scrollable card showing full essay text (max 600px height)
+   - **Student Information**: Fetches and displays student name with clickable link to student page
+   - **Assignment Information**: Fetches and displays assignment name with clickable link to assignment page
+   - **Basic Metrics**: Computes and displays word count, unique words, and TTR from essay text
+   - **Delete Functionality**: 
+     - Delete button in top-right corner
+     - Confirmation dialog before deletion
+     - Error handling with user-friendly messages
+     - Automatic navigation after successful deletion (to student/assignment page or dashboard)
+     - Query invalidation to refresh related data
+
+**Files Modified:**
+- `lambda/api/app/routes/essays.py` - Added essay_text to GET response, added DELETE endpoint
+- `lib/vocab_recommendation-stack.ts` - Added DELETE method to API Gateway
+- `frontend/src/api/client.ts` - Added `deleteEssay()` function
+- `frontend/src/routes/essays.$essayId.tsx` - Enhanced UI with essay text, student/assignment info, metrics, and delete button
+- `frontend/src/types/api.ts` - Added `essay_text?: string` to EssayResponse
+
+**Impact:**
+- Better user experience: teachers can see full essay context while reviewing feedback
+- Easier navigation: clickable links to related student/assignment pages
+- Quick metrics: basic stats visible without leaving the page
+- Data management: ability to delete essays when needed
 
 ## Epic 4 Implementation Details
 

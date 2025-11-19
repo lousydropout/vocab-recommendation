@@ -94,6 +94,20 @@ export async function getEssay(essayId: string): Promise<EssayResponse> {
   return response.json();
 }
 
+export async function deleteEssay(essayId: string): Promise<{ message: string; essay_id: string }> {
+  const response = await apiRequest(`${API_BASE_URL}/essays/${essayId}`, {
+    method: 'DELETE',
+  });
+  if (!response.ok) {
+    if (response.status === 404) {
+      throw new Error("Essay not found");
+    }
+    const errorText = await response.text().catch(() => response.statusText);
+    throw new Error(`Failed to delete essay: ${response.status} ${errorText}`);
+  }
+  return response.json();
+}
+
 export async function uploadBatchEssays(
   assignmentId: string,
   studentId: string | undefined,
@@ -127,6 +141,14 @@ export async function getStudentMetrics(studentId: string) {
   const response = await apiRequest(`${API_BASE_URL}/metrics/student/${studentId}`);
   if (!response.ok) {
     throw new Error(`Failed to fetch student metrics: ${response.statusText}`);
+  }
+  return response.json();
+}
+
+export async function getStudentMetricsForAssignment(assignmentId: string, studentId: string) {
+  const response = await apiRequest(`${API_BASE_URL}/metrics/assignment/${assignmentId}/student/${studentId}`);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch student assignment metrics: ${response.statusText}`);
   }
   return response.json();
 }

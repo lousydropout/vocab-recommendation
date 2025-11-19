@@ -313,3 +313,111 @@ async def get_student_metrics(
         }, exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to retrieve student metrics: {str(e)}")
 
+
+@router.get("/assignment/{assignment_id}/student/{student_id}", response_model=StudentMetricsResponse)
+async def get_student_metrics_for_assignment(
+    assignment_id: str,
+    student_id: str,
+    teacher_ctx: TeacherContext = Depends(get_teacher_context)
+):
+    """
+    Get student-level metrics for a specific student in a specific assignment.
+    
+    Computes metrics on-demand from the Essays table by querying essays
+    for the given assignment_id and student_id.
+    """
+    if not essays_table:
+        raise HTTPException(status_code=500, detail="Essays table not configured")
+    
+    try:
+        # Query essays by assignment_id (partition key)
+        # Filter by teacher_id, student_id, and status='processed'
+        response = essays_table.query(
+            KeyConditionExpression=Key('assignment_id').eq(assignment_id),
+            FilterExpression=Attr('teacher_id').eq(teacher_ctx.teacher_id) &
+                            Attr('student_id').eq(student_id) &
+                            Attr('status').eq('processed')
+        )
+        
+        essays = response.get('Items', [])
+        
+        # Handle pagination
+        while 'LastEvaluatedKey' in response:
+            response = essays_table.query(
+                KeyConditionExpression=Key('assignment_id').eq(assignment_id),
+                FilterExpression=Attr('teacher_id').eq(teacher_ctx.teacher_id) &
+                                Attr('student_id').eq(student_id) &
+                                Attr('status').eq('processed'),
+                ExclusiveStartKey=response['LastEvaluatedKey']
+            )
+            essays.extend(response.get('Items', []))
+        
+        total_essays = len(essays)
+        
+        # Sort essays by created_at to find most recent
+        essays.sort(key=lambda x: x.get('created_at', ''))
+        
+        # Compute metrics from essay texts
+        total_ttr = 0.0
+        total_word_count = 0.0
+        total_unique_words = 0.0
+        total_freq_rank = 0.0
+        essays_with_metrics = 0
+        
+        for essay in essays:
+            essay_text = essay.get('essay_text', '')
+            vocabulary_analysis = essay.get('vocabulary_analysis')
+            
+            if essay_text:
+                metrics = compute_essay_metrics(essay_text, vocabulary_analysis)
+                total_ttr += metrics['type_token_ratio']
+                total_word_count += metrics['word_count']
+                total_unique_words += metrics['unique_words']
+                total_freq_rank += metrics['avg_freq_rank']
+                essays_with_metrics += 1
+        
+        # Compute averages
+        avg_ttr = total_ttr / essays_with_metrics if essays_with_metrics > 0 else 0.0
+        avg_word_count = total_word_count / essays_with_metrics if essays_with_metrics > 0 else 0.0
+        avg_unique_words = total_unique_words / essays_with_metrics if essays_with_metrics > 0 else 0.0
+        avg_freq_rank = total_freq_rank / essays_with_metrics if essays_with_metrics > 0 else 0.0
+        
+        stats = {
+            'avg_ttr': avg_ttr,
+            'avg_word_count': avg_word_count,
+            'avg_unique_words': avg_unique_words,
+            'avg_freq_rank': avg_freq_rank,
+            'total_essays': total_essays,
+            'trend': None,  # Would need 2+ essays with comparable metrics to compute
+            'last_essay_date': essays[-1].get('created_at') if essays else None,
+        }
+        
+        # Get most recent updated_at timestamp
+        updated_at = ''
+        if essays:
+            processed_times = [e.get('processed_at', '') for e in essays if e.get('processed_at')]
+            if processed_times:
+                updated_at = max(processed_times)
+        
+        logger.info("Student assignment metrics computed", extra={
+            "teacher_id": teacher_ctx.teacher_id,
+            "assignment_id": assignment_id,
+            "student_id": student_id,
+            "total_essays": total_essays,
+        })
+        
+        return StudentMetricsResponse(
+            student_id=student_id,
+            stats=stats,
+            updated_at=updated_at,
+        )
+        
+    except Exception as e:
+        logger.error("Failed to get student assignment metrics", extra={
+            "teacher_id": teacher_ctx.teacher_id,
+            "assignment_id": assignment_id,
+            "student_id": student_id,
+            "error": str(e),
+        }, exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve student assignment metrics: {str(e)}")
+

@@ -14,6 +14,7 @@ from pydantic import BaseModel
 from boto3.dynamodb.conditions import Attr, Key
 
 from app.deps import get_teacher_context, get_optional_teacher_context, TeacherContext
+from app.db.students import list_students
 
 logger = logging.getLogger(__name__)
 
@@ -77,6 +78,7 @@ class StudentEssayResponse(BaseModel):
 class PublicEssayRequest(BaseModel):
     """Request model for public essay upload (demo)."""
     essay_text: str
+    student_name: str
 
 
 class PublicEssayResponse(BaseModel):
@@ -165,13 +167,129 @@ async def upload_batch_essays(
         raise HTTPException(status_code=500, detail=f"Failed to upload essays: {str(e)}")
 
 
+def normalize_name(name: str) -> str:
+    """Normalize a name for comparison (lowercase, trim whitespace)."""
+    return name.lower().strip()
+
+
+def match_student_name(student_name: str, students: List[Dict[str, Any]]) -> Optional[str]:
+    """
+    Match student name against list of students using exact matching (case-insensitive).
+    Tries both "FirstName LastName" and "LastName FirstName" formats.
+    
+    Args:
+        student_name: The name to match (from essay first line)
+        students: List of student records from database
+        
+    Returns:
+        student_id if match found, None otherwise
+    """
+    normalized_input = normalize_name(student_name)
+    
+    # Try to split into name parts
+    name_parts = normalized_input.split()
+    if len(name_parts) < 1:
+        return None
+    
+    # Build candidate names to try:
+    # 1. Exact match (handles "John Michael Smith" == "John Michael Smith")
+    candidates = [normalized_input]
+    
+    # 2. If 2+ parts, try reversed first two parts (handles "Zoe Carter" == "Carter Zoe")
+    if len(name_parts) >= 2:
+        first_last = f"{name_parts[0]} {name_parts[1]}"
+        last_first = f"{name_parts[1]} {name_parts[0]}"
+        candidates.append(first_last)
+        candidates.append(last_first)
+    
+    # Try matching against all students
+    for student in students:
+        normalized_student_name = normalize_name(student.get('name', ''))
+        # Try exact match
+        if normalized_student_name in candidates:
+            return student.get('student_id')
+        # If student name has 2+ parts, also try matching first two parts in both orders
+        if len(name_parts) >= 2:
+            student_parts = normalized_student_name.split()
+            if len(student_parts) >= 2:
+                student_first_last = f"{student_parts[0]} {student_parts[1]}"
+                student_last_first = f"{student_parts[1]} {student_parts[0]}"
+                if student_first_last in candidates or student_last_first in candidates:
+                    return student.get('student_id')
+    
+    return None
+
+
+class StudentCheckResponse(BaseModel):
+    """Response model for student existence check."""
+    exists: bool
+    student_id: Optional[str] = None
+    name: Optional[str] = None
+
+
+@router.get("/public/check-student", response_model=StudentCheckResponse)
+async def check_student_exists(student_name: str):
+    """
+    Check if a student exists for the demo teacher.
+    
+    Uses the same matching logic as the upload endpoint to ensure consistency.
+    Returns student info if found, 404 if not found.
+    """
+    DEMO_TEACHER_ID = "demo-teacher"
+    
+    if not student_name or not student_name.strip():
+        raise HTTPException(status_code=400, detail="Student name is required")
+    
+    try:
+        students = list_students(DEMO_TEACHER_ID)
+        matched_student_id = match_student_name(student_name, students)
+        
+        if not matched_student_id:
+            logger.info("Student check: not found", extra={
+                "student_name": student_name,
+                "teacher_id": DEMO_TEACHER_ID,
+            })
+            raise HTTPException(
+                status_code=404,
+                detail=f"Student '{student_name}' not found"
+            )
+        
+        # Find the matched student to return their name
+        matched_student = None
+        for student in students:
+            if student.get('student_id') == matched_student_id:
+                matched_student = student
+                break
+        
+        logger.info("Student check: found", extra={
+            "student_name": student_name,
+            "student_id": matched_student_id,
+            "teacher_id": DEMO_TEACHER_ID,
+        })
+        
+        return StudentCheckResponse(
+            exists=True,
+            student_id=matched_student_id,
+            name=matched_student.get('name') if matched_student else None
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Failed to check student existence", extra={
+            "student_name": student_name,
+            "error": str(e),
+        }, exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to check student: {str(e)}")
+
+
 @router.post("/public", response_model=PublicEssayResponse)
 async def upload_public_essay(request: PublicEssayRequest):
     """
     Public endpoint for demo essay upload (no authentication required).
     
     Creates a demo essay with a special assignment_id and processes it
-    through the same async pipeline.
+    through the same async pipeline. Requires student_name to match against
+    existing students for the demo teacher.
     """
     if not essays_table:
         raise HTTPException(status_code=500, detail="Essays table not configured")
@@ -182,10 +300,41 @@ async def upload_public_essay(request: PublicEssayRequest):
     if not request.essay_text or not request.essay_text.strip():
         raise HTTPException(status_code=400, detail="Essay text is required")
     
+    if not request.student_name or not request.student_name.strip():
+        raise HTTPException(status_code=400, detail="Student name is required")
+    
     # Use a special demo assignment_id for public essays
     DEMO_ASSIGNMENT_ID = "demo-public-assignment"
     DEMO_TEACHER_ID = "demo-teacher"
-    DEMO_STUDENT_ID = ""  # Empty string for unassigned
+    
+    # Match student name against existing students
+    try:
+        students = list_students(DEMO_TEACHER_ID)
+        matched_student_id = match_student_name(request.student_name, students)
+        
+        if not matched_student_id:
+            logger.warning("Student not found for public essay", extra={
+                "student_name": request.student_name,
+                "teacher_id": DEMO_TEACHER_ID,
+            })
+            raise HTTPException(
+                status_code=400,
+                detail=f"Student '{request.student_name}' not found. Please ensure the student exists in the system."
+            )
+        
+        logger.info("Student matched for public essay", extra={
+            "student_name": request.student_name,
+            "student_id": matched_student_id,
+            "teacher_id": DEMO_TEACHER_ID,
+        })
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Failed to match student name", extra={
+            "student_name": request.student_name,
+            "error": str(e),
+        }, exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to match student: {str(e)}")
     
     essay_id = str(uuid.uuid4())
     now = datetime.utcnow().isoformat()
@@ -197,7 +346,7 @@ async def upload_public_essay(request: PublicEssayRequest):
                 'assignment_id': DEMO_ASSIGNMENT_ID,
                 'essay_id': essay_id,
                 'teacher_id': DEMO_TEACHER_ID,
-                'student_id': DEMO_STUDENT_ID,
+                'student_id': matched_student_id,
                 'essay_text': request.essay_text,
                 'status': 'pending',
                 'created_at': now,
@@ -210,7 +359,7 @@ async def upload_public_essay(request: PublicEssayRequest):
             MessageBody=json.dumps({
                 'teacher_id': DEMO_TEACHER_ID,
                 'assignment_id': DEMO_ASSIGNMENT_ID,
-                'student_id': DEMO_STUDENT_ID,
+                'student_id': matched_student_id,
                 'essay_id': essay_id,
             })
         )
@@ -218,6 +367,7 @@ async def upload_public_essay(request: PublicEssayRequest):
         logger.info("Public essay uploaded", extra={
             "essay_id": essay_id,
             "assignment_id": DEMO_ASSIGNMENT_ID,
+            "student_id": matched_student_id,
         })
         
         return PublicEssayResponse(
@@ -278,6 +428,10 @@ async def list_assignment_essays(
                 'created_at': essay.get('created_at'),
                 'processed_at': essay.get('processed_at'),
             }
+            
+            # Include essay_text for metrics computation
+            if 'essay_text' in essay:
+                essay_data['essay_text'] = essay.get('essay_text')
             
             # Include vocabulary_analysis if available
             if 'vocabulary_analysis' in essay:
@@ -422,6 +576,10 @@ async def get_essay(
             'processed_at': essay.get('processed_at'),
         }
         
+        # Include essay_text for reference
+        if 'essay_text' in essay:
+            result['essay_text'] = essay.get('essay_text')
+        
         # Include vocabulary_analysis if processed
         if essay.get('status') == 'processed' and 'vocabulary_analysis' in essay:
             result['vocabulary_analysis'] = essay['vocabulary_analysis']
@@ -525,4 +683,57 @@ async def override_essay_feedback(
             "error": str(e),
         }, exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to override feedback: {str(e)}")
+
+
+@router.delete("/{essay_id}")
+async def delete_essay(
+    essay_id: str,
+    teacher_ctx: TeacherContext = Depends(get_teacher_context)
+):
+    """
+    Delete an essay.
+    
+    Deletes the essay from the Essays table. Only the essay owner can delete it.
+    """
+    if not essays_table:
+        raise HTTPException(status_code=500, detail="Essays table not configured")
+    
+    try:
+        # First, find the essay by scanning (since we only have essay_id)
+        # In production, consider adding a GSI on essay_id
+        response = essays_table.scan(
+            FilterExpression=Attr('essay_id').eq(essay_id) &
+                            Attr('teacher_id').eq(teacher_ctx.teacher_id)
+        )
+        
+        items = response.get('Items', [])
+        if not items:
+            raise HTTPException(status_code=404, detail="Essay not found")
+        
+        essay = items[0]
+        assignment_id = essay.get('assignment_id')
+        
+        # Delete the essay
+        essays_table.delete_item(
+            Key={'assignment_id': assignment_id, 'essay_id': essay_id}
+        )
+        
+        logger.info("Essay deleted", extra={
+            "teacher_id": teacher_ctx.teacher_id,
+            "essay_id": essay_id,
+            "assignment_id": assignment_id,
+            "student_id": essay.get('student_id'),
+        })
+        
+        return {"message": "Essay deleted successfully", "essay_id": essay_id}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Failed to delete essay", extra={
+            "teacher_id": teacher_ctx.teacher_id,
+            "essay_id": essay_id,
+            "error": str(e),
+        }, exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to delete essay: {str(e)}")
 

@@ -380,6 +380,55 @@
 
 ## Recent Updates (2025-01-XX)
 
+### Metrics Computation Fix & Essay Review Enhancements
+
+**Date:** 2025-01-XX
+
+**Summary:**
+- Fixed student metrics display issue in assignment detail view
+- Moved metrics computation from frontend to backend for consistency
+- Enhanced essay review page with additional context and delete functionality
+
+**Completed:**
+
+1. ✅ **Metrics Computation Architecture**:
+   - Created new backend endpoint `/metrics/assignment/{assignment_id}/student/{student_id}`
+   - Moved metrics computation from frontend to backend
+   - Fixed issue where student metrics showed zeros despite processed essays
+   - Metrics now correctly filtered by assignment (not all assignments)
+
+2. ✅ **Essay Review Page Enhancements**:
+   - Added essay text display in scrollable card
+   - Added student name with clickable link to student page
+   - Added assignment name with clickable link to assignment page
+   - Added basic metrics (word count, unique words, TTR) computed from essay text
+   - Added delete button with confirmation dialog
+   - Added automatic navigation after deletion
+
+3. ✅ **Backend Updates**:
+   - Updated `GET /essays/{essay_id}` to include `essay_text` in response
+   - Added `DELETE /essays/{essay_id}` endpoint
+   - Added API Gateway route for delete endpoint
+
+**Files Modified:**
+- `lambda/api/app/routes/metrics.py` - Added assignment-scoped student metrics endpoint
+- `lambda/api/app/routes/essays.py` - Added essay_text to GET response, added DELETE endpoint
+- `lib/vocab_recommendation-stack.ts` - Added DELETE method and new metrics endpoint route
+- `frontend/src/api/client.ts` - Added `getStudentMetricsForAssignment()` and `deleteEssay()` functions
+- `frontend/src/routes/assignments.$assignmentId.tsx` - Removed local metrics computation, uses backend endpoint
+- `frontend/src/routes/essays.$essayId.tsx` - Enhanced with essay text, student/assignment info, metrics, delete button
+- `frontend/src/types/api.ts` - Added `essay_text?: string` to EssayResponse
+
+**Impact:**
+- Student metrics now display correctly in assignment detail view
+- Metrics computation is consistent across all endpoints
+- Essay review page provides better context for teachers
+- Teachers can now delete essays when needed
+
+---
+
+## Recent Updates (2025-01-XX)
+
 ### Frontend Improvements - Real Data Integration & Navigation
 
 **Date:** 2025-01-XX

@@ -38,11 +38,40 @@ const EXAMPLE_ESSAYS = [
   { filename: 'Walsh_Henry.txt', displayName: 'Essay 15 - Walsh Henry' },
 ]
 
+/**
+ * Extract student name from the first line of essay text.
+ * Handles both "FirstName LastName" and "LastName FirstName" formats.
+ * Also handles common prefixes like "Name:" or suffixes like "— Grade".
+ * 
+ * @param essayText - The full essay text
+ * @returns The extracted student name, or null if not found
+ */
+function extractStudentName(essayText: string): string | null {
+  const firstLine = essayText.split('\n')[0]?.trim()
+  if (!firstLine) return null
+  
+  // Remove common prefixes like "Name:" or "Name -"
+  let name = firstLine.replace(/^Name:\s*/i, '').trim()
+  
+  // Remove suffixes like "— Grade 10" or "- Grade 10"
+  name = name.replace(/\s*[—–-]\s*Grade\s*\d+.*$/i, '').trim()
+  name = name.replace(/\s*[—–-].*$/, '').trim()
+  
+  // Normalize multiple spaces to single space
+  name = name.replace(/\s+/g, ' ').trim()
+  
+  if (!name) return null
+  
+  return name
+}
+
 function HomePage() {
   const [essayText, setEssayText] = useState('')
   const [status, setStatus] = useState<'idle' | 'uploading' | 'processing' | 'completed' | 'error'>('idle')
   const [essay, setEssay] = useState<EssayResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [studentValidationError, setStudentValidationError] = useState<string | null>(null)
+  const [isCheckingStudent, setIsCheckingStudent] = useState(false)
   const [pollingInterval, setPollingInterval] = useState<NodeJS.Timeout | null>(null)
   const [selectedEssay, setSelectedEssay] = useState<string>('none')
   const [isLoadingEssay, setIsLoadingEssay] = useState(false)
@@ -51,6 +80,14 @@ function HomePage() {
     e.preventDefault()
     if (!essayText.trim()) {
       setError('Please enter some essay text')
+      return
+    }
+
+    // Extract student name from first line
+    const studentName = extractStudentName(essayText)
+    if (!studentName) {
+      setError('Could not extract student name from the first line of the essay. Please ensure the first line contains the student name (e.g., "Zoe Carter" or "Carter Zoe").')
+      setStatus('error')
       return
     }
 
@@ -67,12 +104,23 @@ function HomePage() {
         },
         body: JSON.stringify({
           essay_text: essayText,
+          student_name: studentName,
         }),
       })
 
       if (!response.ok) {
         const errorText = await response.text().catch(() => response.statusText)
-        throw new Error(`Failed to upload essay: ${response.status} ${errorText}`)
+        // Try to parse error message if it's JSON
+        let errorMessage = errorText
+        try {
+          const errorJson = JSON.parse(errorText)
+          if (errorJson.detail) {
+            errorMessage = errorJson.detail
+          }
+        } catch {
+          // Not JSON, use as-is
+        }
+        throw new Error(errorMessage || `Failed to upload essay: ${response.status}`)
       }
 
       const result = await response.json()
@@ -178,6 +226,53 @@ function HomePage() {
     loadEssay(value)
   }
 
+  // Debounced student validation when essay text changes
+  useEffect(() => {
+    // Check if student exists
+    const checkStudentExists = async (studentName: string) => {
+      if (!studentName || !studentName.trim()) {
+        setStudentValidationError(null)
+        return
+      }
+
+      setIsCheckingStudent(true)
+      try {
+        const response = await fetch(
+          `${config.API_URL}/essays/public/check-student?student_name=${encodeURIComponent(studentName)}`
+        )
+
+        if (response.status === 404) {
+          const errorData = await response.json().catch(() => ({ detail: 'Student not found' }))
+          setStudentValidationError(errorData.detail || `Student "${studentName}" not found. Please ensure the student exists in the system.`)
+        } else if (!response.ok) {
+          // Other errors - don't show validation error, let submit handle it
+          setStudentValidationError(null)
+        } else {
+          // Student exists - clear any previous error
+          setStudentValidationError(null)
+        }
+      } catch (err) {
+        // Network or other errors - don't show validation error
+        setStudentValidationError(null)
+      } finally {
+        setIsCheckingStudent(false)
+      }
+    }
+
+    // Clear previous timeout
+    const timeoutId = setTimeout(() => {
+      const studentName = extractStudentName(essayText)
+      if (studentName) {
+        checkStudentExists(studentName)
+      } else {
+        // No name extracted - clear validation error
+        setStudentValidationError(null)
+      }
+    }, 500) // Wait 500ms after user stops typing
+
+    return () => clearTimeout(timeoutId)
+  }, [essayText])
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
       <div className="container mx-auto px-4 py-12 max-w-4xl">
@@ -247,7 +342,17 @@ function HomePage() {
                 className="font-mono text-sm"
               />
               
-              {error && (
+              {studentValidationError && (
+                <Alert variant="destructive">
+                  <XCircle className="h-4 w-4" />
+                  <AlertDescription>
+                    {studentValidationError}
+                    {isCheckingStudent && ' (checking...)'}
+                  </AlertDescription>
+                </Alert>
+              )}
+              
+              {error && !studentValidationError && (
                 <Alert variant="destructive">
                   <XCircle className="h-4 w-4" />
                   <AlertDescription>{error}</AlertDescription>
@@ -257,7 +362,7 @@ function HomePage() {
               <div className="flex gap-2">
                 <Button
                   type="submit"
-                  disabled={status === 'uploading' || status === 'processing' || !essayText.trim()}
+                  disabled={status === 'uploading' || status === 'processing' || !essayText.trim() || !!studentValidationError}
                   className="flex-1"
                 >
                   {status === 'uploading' || status === 'processing' ? (

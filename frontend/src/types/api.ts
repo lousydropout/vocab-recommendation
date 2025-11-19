@@ -11,6 +11,7 @@ export interface EssayResponse {
   assignment_id: string;
   student_id: string;
   status: "pending" | "processed";
+  essay_text?: string;
   vocabulary_analysis?: VocabularyAnalysis;
   created_at: string;
   processed_at?: string;
